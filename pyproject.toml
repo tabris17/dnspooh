@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dnspooh"
+description = "A Lightweight DNS Proxy/Relay"
+authors = [
+  { name="tabris17", email="tabris17.cn@gmail.com" },
+]
+classifiers = [
+  "Topic :: Internet :: Name Service (DNS)",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3 :: Only",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent"
+]
+requires-python = ">=3.11"
+dynamic = ["version", "readme", "dependencies"]
+
+[project.urls]
+"Homepage" = "https://github.com/tabris17/dnspooh"
+"Bug Tracker" = "https://github.com/tabris17/dnspooh/issues"
+
+[project.entry-points.console_scripts]
+dnspooh = "dnspooh.cli:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "dnspooh.__version__"}
+readme = {file = ["README.md"], content-type = "text/markdown"}
+dependencies = {file = ["requirements.txt"]}
+
+[tool.setuptools.package-data]
+dnspooh = ["geoip"]
