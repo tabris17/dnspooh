@@ -1,0 +1,35 @@
+cache: 
+  max_size: 4096
+  ttl: 3600
+  enable: true
+
+upstreams:
+  - name: 114dns
+    host: 114.114.114.114
+
+  - name: baidu
+    host: 180.76.76.76
+
+  - name: alidns-https
+    url: https://dns.alidns.com/dns-query
+
+  - name: alidns-tls
+    host: dns.alidns.com
+    type: tls
+
+  - name: google-https
+    url: https://dns.google/dns-query
+  
+  - name: cloudflare-https
+    url: https://1.1.1.1/dns-query
+    
+  - name: google-tls
+    type: tls
+    host: 8.8.8.8
+
+  - name: cloudflare
+    host: 1.1.1.1
+
+  - name: cloudflare-tls
+    type: tls
+    host: 1.1.1.1
