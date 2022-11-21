@@ -8,7 +8,7 @@ import struct
 from dnslib import DNSRecord
 
 import https
-from config import DnsUpstream, HttpsUpstream, TlsUpstream
+from config import DnsUpstream, HttpsUpstream, TlsUpstream, ConfigInvalid
 from middleware import *
 from pool import Pool
 
@@ -52,20 +52,40 @@ class Proxy:
         self.transport = None
         logging.debug('Proxy serivce initialized')
 
-    async def bootstrap(self, host, port, timeout, upstreams, bootstrap):
+    async def bootstrap(self, host, port, timeout, upstreams):
         self.host = host
         self.port = port
-        self.timeout = timeout / 1000
+        self.timeout = timeout
         self.upstreams = upstreams
-        for _, upstreams in self.config['upstreams'].items():
-            for upstream in upstreams:
-                if (isinstance(upstream, HttpsUpstream) or \
-                    isinstance(upstream, TlsUpstream)) and not upstream.host:
-                    request = DNSRecord.question(upstream.hostname)
-                    response = await self.handle(request, bootstrap)
-                    if not response or response.header.a == 0:
-                        raise RuntimeError('Failed to bootstrap: cannot resolve "{0}"'.format(upstream.hostname))
-                    upstream.host = str(response.rr[0].rdata)
+        bootstrap_upstreams = []
+        hostname_upstreams = []
+        grouped_upstreams = dict()
+        named_upstreams = dict()
+
+        for upstream in upstreams:
+            if isinstance(upstream, DnsUpstream):
+                bootstrap_upstreams.append(upstream)
+            elif not upstream.host:
+                hostname_upstreams.append(upstream)
+
+            if upstream.name:
+                if upstream.name in named_upstreams:
+                    raise ConfigInvalid('Duplicated upstream name "{0}"'.format(upstream.name))
+                named_upstreams[upstream.name] = upstream
+
+            if upstream.group:
+                if upstream.group in grouped_upstreams:
+                    grouped_upstreams[upstream.group].append(upstream)
+                else:
+                    grouped_upstreams[upstream.group] = [upstream]
+
+        for hostname_upstream in hostname_upstreams:
+            request = DNSRecord.question(hostname_upstream.hostname)
+            response = await self.handle(request, bootstrap_upstreams)
+            if not response or response.header.a == 0:
+                raise RuntimeError('Failed to bootstrap: cannot resolve "{0}"'.format(hostname_upstream.hostname))
+            hostname_upstream.host = str(response.rr[0].rdata)
+
         logging.debug('Proxy serivce bootstrapped')
 
     async def resolve_by_dns(self, query, upstream):
@@ -114,7 +134,7 @@ class Proxy:
     async def handle(self, request, upstreams=None):
         response = None
         data = DNSRecord.pack(request)
-        for upstream in self.upstreams if upstreams is None else upstreams:
+        for upstream in (self.upstreams if upstreams is None else upstreams):
             if isinstance(upstream, DnsUpstream):
                 resolver = self.resolve_by_dns
             elif isinstance(upstream, HttpsUpstream):
@@ -147,7 +167,11 @@ class Proxy:
         return self.abort_event.set()
 
     async def run(self):
-        await self.bootstrap(**self.config['proxy'])
+        host = self.config['host']
+        port = self.config['port']
+        timeout = self.config['timeout']
+        upstreams = self.config['upstreams']
+        await self.bootstrap(host, port, timeout, upstreams)
 
         try:
             loop = asyncio.get_running_loop()

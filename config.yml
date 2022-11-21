@@ -1,7 +1,9 @@
 cache: 
   max_size: 4096
   ttl: 3600
-  enable: true
+
+plugins:
+  - cache
 
 upstreams:
   - name: 114dns

@@ -11,11 +11,9 @@ except ImportError:
 
 VERSION = '0.1.0'
 
-UPSTREAM_SERVERS = ['google', 'alidns']
-
 LISTEN_HOST = '0.0.0.0'
 
-UPSTREAM_TIMEOUT = 5000
+UPSTREAM_TIMEOUT = 1
 
 CACHE_MAX_SIZE = 4096
 
@@ -33,35 +31,62 @@ DEFAULT_SOCKS5_PROXY_PORT = 1080
 
 BUILTIN_UPSTREAMS = [
     {
-        'name': 'google',
+        'name': 'google-1',
         'type': 'dns',
         'host': '8.8.8.8',
         'port': DEFAULT_DNS_PORT,
+        'group': 'google',
     },
     {
-        'name': 'google',
+        'name': 'google-2',
         'type': 'dns',
         'host': '8.8.4.4',
         'port': DEFAULT_DNS_PORT,
+        'group': 'google',
     },
     {
-        'name': 'alidns',
+        'name': 'alidns-1',
         'type': 'dns',
         'host': '223.6.6.6',
         'port': DEFAULT_DNS_PORT,
+        'group': 'alidns',
     },
     {
-        'name': 'alidns',
+        'name': 'alidns-2',
         'type': 'dns',
         'host': '223.5.5.5',
         'port': DEFAULT_DNS_PORT,
+        'group': 'alidns',
     },
 ]
 
+DEFAULT_CONFIG = {
+    'debug': False,
+    'host': LISTEN_HOST,
+    'port': DEFAULT_DNS_PORT,
+    'timeout': UPSTREAM_TIMEOUT,
+    'upstreams': BUILTIN_UPSTREAMS,
+    'proxy': None,
+}
+
+
+class Stats:
+    pass
+
+
+class Upstreams:
+    def __init__(self):
+        self._default = list()
+        self._grouped = dict()
+
 
 class Upstream:
-    def __init__(self, name):
-        self.name = name
+    def __init__(self, **kwargs):
+        self.name = kwargs.get('name', '')
+        self.proxy = kwargs.get('proxy')
+        self.timeout = kwargs.get('timeout')
+        self.group = kwargs.get('group')
+        self.stats = Stats()
 
     def __repr__(self):
         return str(vars(self))
@@ -72,15 +97,14 @@ class Upstream:
 
 class DnsUpstream(Upstream):
     def __init__(self, **kwargs):
-        super().__init__(kwargs.get('name', ''))
+        super().__init__(**kwargs)
         self.host = kwargs['host']
         self.port = kwargs.get('port', DEFAULT_DNS_PORT)
-        self.proxy = kwargs.get('proxy')
 
 
 class HttpsUpstream(Upstream):
     def __init__(self, **kwargs):
-        super().__init__(kwargs.get('name', ''))
+        super().__init__(**kwargs)
         self.url = kwargs['url']
         parsed_url = urlsplit(self.url)
         self.hostname = parsed_url.hostname
@@ -91,12 +115,11 @@ class HttpsUpstream(Upstream):
             self.host = None
         self.port = parsed_url.port if parsed_url.port else DEFAULT_HTTPS_PORT
         self.path = parsed_url.path
-        self.proxy = kwargs.get('proxy')
 
 
 class TlsUpstream(Upstream):
     def __init__(self, **kwargs):
-        super().__init__(kwargs.get('name', ''))
+        super().__init__(**kwargs)
         self.hostname = kwargs['host']
         try:
             ip_address(self.hostname)
@@ -104,7 +127,6 @@ class TlsUpstream(Upstream):
         except ValueError:
             self.host = None
         self.port = kwargs.get('port', DEFAULT_DOT_PORT)
-        self.proxy = kwargs.get('proxy')
 
 
 class Proxy:
@@ -161,7 +183,7 @@ def proxy_from_url(url):
         raise ValueError('Invalid proxy scheme "{0}" in "{1}"'.format(url, parsed_url.scheme))
 
 
-def parse_upstream(server, upstreams=None):
+def parse_upstream(server):
     if isinstance(server, dict):
         server_type = server.get('type', 'https' if 'url' in server else 'dns')
         if server_type == 'dns':
@@ -178,9 +200,6 @@ def parse_upstream(server, upstreams=None):
             raise ConfigInvalid('Missing config key "{0}" in "{1}"'.format(e.args[0], server))
     elif not isinstance(server, str):
         raise TypeError('Parameter server must be dict or string')
-
-    if server in upstreams:
-        return upstreams[server]
 
     parsed_url = urlsplit(
         server if server.startswith('https://') \
@@ -201,7 +220,7 @@ def parse_upstream(server, upstreams=None):
                                    if parsed_url.port is None \
                                    else parsed_url.port)
 
-    raise ValueError('Invalid upstream format')
+    raise ValueError('Invalid upstream format "{0}"'.format(server))
 
 
 def load_from_file(file):
@@ -211,22 +230,21 @@ def load_from_file(file):
 
 def load_from_args(args):
     conf = dict()
-    conf['proxy'] = dict()
 
     if args.debug is not None:
         conf['debug'] = args.debug
 
     if args.host is not None:
-        conf['proxy']['host'] = args.host
+        conf['host'] = args.host
 
     if args.port is not None:
-        conf['proxy']['port'] = args.port
+        conf['port'] = args.port
 
     if args.timeout is not None:
-        conf['proxy']['timeout'] = args.timeout
+        conf['timeout'] = args.timeout
 
     if args.upstreams is not None:
-        conf['proxy']['upstreams'] = args.upstreams
+        conf['upstreams'] = args.upstreams
 
     return conf
 
@@ -274,18 +292,6 @@ class Config:
 
     @classmethod
     def load(cls, args):
-        default_conf = {
-            'debug': False,
-            'proxy': {
-                'host': LISTEN_HOST,
-                'port': DEFAULT_DNS_PORT,
-                'upstreams': UPSTREAM_SERVERS,
-                'timeout': UPSTREAM_TIMEOUT,
-                'bootstrap': 'google',
-            },
-            'upstreams': BUILTIN_UPSTREAMS,
-        }
-
         conf = load_from_args(args)
 
         if args.config:
@@ -293,28 +299,8 @@ class Config:
             if conf_from_file:
                 conf = merge_dict_recursive(conf, conf_from_file)
 
-        conf = merge_dict_recursive(conf, default_conf)
+        conf = merge_dict_recursive(conf, DEFAULT_CONFIG)
 
-        upstreams_list = [parse_upstream(_) for _ in conf['upstreams']]
-        upstreams_dict = dict()
-        for _up in upstreams_list:
-            if _up.name in upstreams_dict:
-                upstreams_dict[_up.name].append(_up)
-            else:
-                upstreams_dict[_up.name] = [_up]
-        conf['upstreams'] = upstreams_dict
-        proxy_upstreams = list()
-        for _server in conf['proxy']['upstreams']:
-            _up = parse_upstream(_server, upstreams_dict)
-            #proxy_upstreams.append(_up if isinstance(_up, list) else [_up])
-            proxy_upstreams = proxy_upstreams + (_up if isinstance(_up, list) else [_up])
-
-        conf['proxy']['upstreams'] = proxy_upstreams
-        bootstrap_upstream = parse_upstream(conf['proxy']['bootstrap'], upstreams_dict)
-        conf['proxy']['bootstrap'] = bootstrap_upstream \
-            if isinstance(bootstrap_upstream, list) else [bootstrap_upstream]
-        for _up in conf['proxy']['bootstrap']:
-            if _up.host is None:
-                raise ValueError('Proxy bootstrap must use IP address')
+        conf['upstreams'] = [parse_upstream(_) for _ in conf['upstreams']]
 
         return cls(conf)

@@ -17,7 +17,7 @@ def parse_arguments():
     parser.add_argument('-c', '--config', metavar='file', dest='config',
                         help='config file path (example "config.yml")')
     parser.add_argument('-u', '--upstream', metavar='servers', dest='upstreams', nargs='+',
-                        help='space-separated upstream DNS servers list (default "{0}")'.format(' '.join(UPSTREAM_SERVERS)))
+                        help='space-separated upstream DNS servers list')
     parser.add_argument('-t', '--timeout', metavar='ms', dest='timeout', type=int, 
                         help='milliseconds for upstream DNS response timeout (default "{0}"ms)'.format(UPSTREAM_TIMEOUT))
     parser.add_argument('-h', '--host', metavar='host', dest='host', 
