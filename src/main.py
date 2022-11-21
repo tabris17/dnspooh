@@ -4,7 +4,8 @@ import logging
 import sys
 
 from config import *
-from proxy import Proxy
+from server import Server
+from upstream import *
 
 
 def parse_arguments():
@@ -53,8 +54,8 @@ async def main():
     main_loop = asyncio.get_running_loop()
     main_loop.set_debug(debug)
 
-    proxy = Proxy(config)
-    await proxy.run()
+    server = Server(config)
+    await server.run()
 
 
 if __name__ == '__main__':
