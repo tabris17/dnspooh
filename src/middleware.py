@@ -12,8 +12,8 @@ class Middleware:
     def abort(self):
         return self.next.abort()
 
-    async def handle(self, request, upstreams=None):
-        return await self.next.handle(request, upstreams)
+    async def handle(self, request, **kwarg):
+        return await self.next.handle(request, **kwarg)
 
 
 class CacheMiddleware(Middleware):

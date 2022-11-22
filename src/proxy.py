@@ -35,7 +35,8 @@ def parse_proxy(url):
         raise ValueError('Invalid proxy "{0}"'.format(url))
 
     try:
-        host = ip_address(parsed_url.hostname)
+        ip_address(parsed_url.hostname)
+        host = parsed_url.hostname
     except ValueError:
         host = None
 

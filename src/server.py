@@ -82,7 +82,7 @@ class Server:
 
         for hostname_upstream in hostname_upstreams:
             request = DNSRecord.question(hostname_upstream.hostname)
-            response = await self.handle(request, bootstrap_upstreams)
+            response = await self.handle(request, upstreams=bootstrap_upstreams)
             if not response or response.header.a == 0:
                 raise RuntimeError('Failed to bootstrap: cannot resolve "{0}"'.format(hostname_upstream.hostname))
             hostname_upstream.host = str(response.rr[0].rdata)
@@ -132,10 +132,10 @@ class Server:
             writer.transport.close()
         return response
 
-    async def handle(self, request, upstreams=None):
+    async def handle(self, request, **kwargs):
         response = None
         data = DNSRecord.pack(request)
-        for upstream in (self.upstreams if upstreams is None else upstreams):
+        for upstream in (self.upstreams if 'upstreams' not in kwargs else kwargs['upstreams']):
             if isinstance(upstream, DnsUpstream):
                 resolver = self.resolve_by_dns
             elif isinstance(upstream, HttpsUpstream):
@@ -145,14 +145,16 @@ class Server:
             else:
                 raise NotImplementedError('Unspported upstream')
             try:
-                response = await asyncio.wait_for(resolver(data, upstream), self.timeout)
+                response = await asyncio.wait_for(
+                    resolver(data, upstream), 
+                    self.timeout if 'timeout' not in kwargs else kwargs['timeout']
+                )
                 if response is not None:
                     break
             except TimeoutError:
                 logging.info('Upstream server {0} response timeout'.format(upstream.to_addr()))
 
-        return DNSRecord.parse(response) \
-            if response is not None else None
+        return DNSRecord.parse(response) if response is not None else None
 
     async def on_request(self, data, addr):
         request = DNSRecord.parse(data)

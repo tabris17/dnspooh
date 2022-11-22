@@ -109,6 +109,9 @@ def merge_dict_recursive(original, addition):
     return original
 
 
+class InvalidConfig(Exception): pass
+
+
 class Config:
     def __init__(self, conf):
         self.conf = conf
@@ -139,7 +142,10 @@ class Config:
 
         conf = merge_dict_recursive(conf, DEFAULT_CONFIG)
 
-        conf['upstreams'] = [parse_upstream(_) for _ in conf['upstreams']]
-        conf['proxy'] = parse_proxy(conf.get('proxy'))
+        try:
+            conf['upstreams'] = [parse_upstream(_) for _ in conf['upstreams']]
+            conf['proxy'] = parse_proxy(conf.get('proxy'))
+        except ValueError as e:
+            raise InvalidConfig(e)
 
         return cls(conf)

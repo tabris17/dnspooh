@@ -79,11 +79,11 @@ def parse_upstream(server):
         elif server_type == 'tls':
             upstream_class = TlsUpstream
         else:
-            raise RuntimeError('Invalid upstream type')
+            raise ValueError('Invalid upstream type')
         try:
             return upstream_class(**server)
         except KeyError as e:
-            raise RuntimeError('Missing config key "{0}" in "{1}"'.format(e.args[0], server))
+            raise ValueError('Missing config key "{0}" in "{1}"'.format(e.args[0], server))
     elif not isinstance(server, str):
         raise TypeError('Parameter server must be dict or string')
 
