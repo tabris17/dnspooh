@@ -64,9 +64,9 @@ class Server:
         named_upstreams = dict()
 
         for upstream in upstreams:
-            if isinstance(upstream, DnsUpstream):
+            if upstream.host:
                 bootstrap_upstreams.append(upstream)
-            elif not upstream.host:
+            else:
                 hostname_upstreams.append(upstream)
 
             if upstream.name:
