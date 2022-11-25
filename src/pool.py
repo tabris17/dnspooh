@@ -1,53 +1,135 @@
 import asyncio
 import ssl
+import logging
+
+from scheme import Scheme
 
 
-class PoolStreamReaderProtocol(asyncio.streams.StreamReaderProtocol):
+class PoolStreamReaderProtocol(asyncio.StreamReaderProtocol):
     def eof_received(self):
         super().eof_received()
         return False
 
+    def data_received(self, data):
+        return super().data_received(data)
+
+    def connection_made(self, transport):
+        return super().connection_made(transport)
+
     def connection_lost(self, exc):
         super().connection_lost(exc)
-        if self._connection_lost_cb is not None:
-            self._connection_lost_cb(self.name)
+        if self._connection_lost_cb and self.conn:
+            self.conn.exc
+            self._connection_lost_cb(self.conn)
 
-    def __init__(self, name, stream_reader, on_connection_lost):
-        super.__init__(stream_reader)
-        self.name = name
+    def __init__(self, stream_reader, on_connection_lost=None, **kwds):
+        super().__init__(stream_reader, **kwds)
         self._connection_lost_cb = on_connection_lost
+        self.conn = None
+
+
+class Connection:
+    def __init__(self, name, reader, writer):
+        self.name = name
+        self.reader = reader
+        self.writer = writer
+        self.exc = None
+        self.idle = True
+
+    def __enter__(self):
+        self.idle = False
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.idle = True
+
+    def __repr__(self):
+        return self.name
+
+    def is_closing(self):
+        return self.writer.transport.is_closing()
 
 
 class Pool:
     DEFAULT_LIMIT = 2 ** 16
+    DEFAULT_SIZE = 2 ** 10
 
-    def __init__(self, loop=None):
-        self._connections = dict()
-        self._loop = asyncio.get_running_loop() if loop is None else loop
+    def __init__(self, loop=None, size=DEFAULT_SIZE):
+        self.size = size
+        self.total = 0
+        self.conns = dict()
+        self.loop = asyncio.get_running_loop() if loop is None else loop
 
-    def _generate_name(self, scheme, host, port):
-        return '{scheme}:{host}:{port}'.format(scheme=scheme, host=host, port=port)
+    def add(self, conn):
+        if self.DEFAULT_SIZE <= self.total or conn.is_closing():
+            return False
+        if conn.name in self.conns:
+            if conn in self.conns[conn.name]:
+                return False
+            self.conns[conn.name].add(conn)
+        else:
+            self.conns[conn.name] = set([conn])
+        self.total += 1
 
-    def get_connection(self, scheme, host, port):
-        connection_name = self._generate_name(scheme, host, port)
-        if connection_name in self._connections:
-            transport = self._connections[connection_name]
-            if not transport.is_closing():
-                return transport
-            del self._connections[connection_name]
+        logging.debug('Add "%s" to connection pool' % (conn.name, ))
+        return True
 
-        self.open_connection(host, port)
+    def remove(self, conn):
+        if conn.name in self.conns:
+            if conn in self.conns[conn.name]:
+                self.conns[conn.name].remove(conn)
+                self.total -= 1
+                return True
 
-    async def open_connection(self, host, port, *,
-                              limit=DEFAULT_LIMIT, **kwds):
-        ssl_context = ssl.create_default_context()
-        reader = asyncio.StreamReader(limit=limit, loop=self._loop)
-        protocol = PoolStreamReaderProtocol(reader, loop=self._loop)
-        transport, _ = await self._loop.create_connection(
-            lambda: protocol, host, port, **kwds)
-        ssl_transport = await self._loop.start_tls(transport, protocol, ssl_context)
-        writer = asyncio.StreamWriter(ssl_transport, protocol, reader, self._loop)
-        return reader, writer
+        return False
 
+    def get(self, conn_name):
+        if conn_name not in self.conns:
+            return
+        for conn in self.conns[conn_name]:
+            if conn.idle:
+                return conn
+        return
 
+    def on_connection_lost(self, conn):
+        self.remove(conn)
+        logging.debug('Remove "%s" from connection pool' % (conn.name, ))
 
+    async def connect(self, host, port, 
+                      scheme=Scheme.tcp, proxy=None, 
+                      limit=DEFAULT_LIMIT, **kwds):
+        conn_name = self._make_conn_name(host, port, scheme, proxy)
+        conn = self.get(conn_name)
+        if conn:
+            return conn
+
+        reader = asyncio.StreamReader(limit=limit, loop=self.loop)
+        protocol = PoolStreamReaderProtocol(reader, self.on_connection_lost, loop=self.loop)
+        if proxy:
+            transport, _ = await self.loop.create_connection(
+                lambda: protocol, proxy.host, proxy.port, **kwds)
+            writer = asyncio.StreamWriter(transport, protocol, reader, self.loop)
+            if not await proxy.handshake(reader, writer, (host, port)):
+                raise ConnectionError('Failed to handshake with proxy "%s"' % (proxy.url, ))
+        else:
+            transport, _ = await self.loop.create_connection(
+                lambda: protocol, host, port, **kwds)
+            writer = asyncio.StreamWriter(transport, protocol, reader, self.loop)
+
+        if scheme == Scheme.tls:
+            try:
+                transport = await self.loop.start_tls(transport, protocol, ssl.create_default_context())
+                writer = asyncio.StreamWriter(transport, protocol, reader, self.loop)
+            except ssl.SSLError as exc:
+                raise ConnectionError('Failed to establish tls connection: %s' % (exc, ))
+
+        protocol.conn = conn = Connection(conn_name, reader, writer)
+        if not self.add(conn):
+            raise ConnectionError('Fail to connect "%s"' % (conn_name, ))
+
+        return conn
+
+    @staticmethod
+    def _make_conn_name(host, port, scheme, proxy):
+        name = '%s://%s:%d' % (scheme.name, host, port)
+
+        return name if proxy is None else '%s/%s' % (proxy.url, name)

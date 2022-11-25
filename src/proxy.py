@@ -1,5 +1,10 @@
+import base64
+import struct
+import ipaddress
+
 from urllib.parse import urlsplit
-from ipaddress import ip_address
+
+from scheme import Scheme
 
 
 DEFAULT_HTTP_PROXY_PORT = 8080
@@ -7,20 +12,136 @@ DEFAULT_HTTP_PROXY_PORT = 8080
 DEFAULT_SOCKS5_PROXY_PORT = 1080
 
 class Proxy:
-    def __init__(self, url, hostname, port, host=None):
+    def __init__(self, url, hostname, port, host=None, username=None, password=None):
         self.url = url
         self.hostname = hostname
         self.port = port
         self.host = host
+        self.username = username
+        self.password = password
 
     def __repr__(self):
         return str(vars(self))
 
+    def has_auth(self):
+        return self.username is not None and \
+               self.password is not None
 
-class HttpProxy(Proxy): pass
+    async def handshake(self, reader, writer, remote_addr):
+        raise NotImplementedError()
 
 
-class Socks5Proxy(Proxy): pass
+class HttpProxy(Proxy):
+    async def handshake(self, reader, writer, remote_addr):
+        if self.has_auth():
+            credentials = base64.b64encode(
+                ('%s:%s' % (self.username, self.password)).encode()
+            ).decode()
+            request = 'CONNECT %s:%s HTTP/1.1\r\n' % remote_addr
+            request += 'Proxy-Authorization: basic %s\r\n\r\n' % (credentials, )
+        else:
+            request = 'CONNECT %s:%s HTTP/1.1\r\n\r\n' % remote_addr
+
+        writer.write(request.encode())
+        await writer.drain()
+        response = await reader.readuntil(b'\r\n\r\n')
+        return response.startswith(b'HTTP/1.1 200')
+
+
+class Socks5Proxy(Proxy):
+    VERSION = 5
+    AUTH_METHOD = 2
+    NONE_METHOD = 0
+    AUTH_SUCCESS = 0
+    CMD_CONNECT = 1
+    CMD_UDP_ASSOCIATE = 3
+    ATYP_IPV4 = 1
+    ATYP_IPV6 = 4
+    REP_SUCCESS = 0
+
+    async def _handshake(self, reader, writer, remote_addr, scheme=Scheme.tcp):
+        writer.write(struct.pack('!3B', self.VERSION, 1, self.AUTH_METHOD))
+        await writer.drain()
+        server_version, method = struct.unpack('!2B', await reader.readexactly(2))
+        if server_version != self.VERSION:
+            raise ConnectionError('Unsupported socks proxy version %d' % (server_version, ))
+        if method != self.NONE_METHOD:
+            if not self.has_auth():
+                raise ConnectionError('Proxy "%s" need authentication' % (self.url, ))
+            if method != self.AUTH_METHOD:
+                raise ConnectionError('Unsupported socks proxy authentication method %d' % (method, ))
+
+            username = self.username.encode()
+            password = self.password.encode()
+            username_len = len(username)
+            password_len = len(password)
+            writer.write(struct.pack(
+                '!2B%dsB%ds' % (username_len, password_len), 
+                self.VERSION, 
+                username_len,
+                username,
+                password_len,
+                password
+            ))
+            await writer.drain()
+            method, status = struct.unpack('!2B', await reader.readexactly(2))
+            if status != self.AUTH_SUCCESS:
+                raise ConnectionError('Socks proxy authentication failed')
+
+        dst_addr, dst_port = remote_addr
+        ip_addr = ipaddress.ip_address(dst_addr)
+        if isinstance(ip_addr, ipaddress.IPv4Address):
+            writer.write(struct.pack(
+                '!4B4sH', 
+                self.VERSION, 
+                self.CMD_CONNECT if scheme == Scheme.tcp else self.CMD_UDP_ASSOCIATE,
+                0, 
+                self.ATYP_IPV4,
+                ip_addr.packed,
+                dst_port
+            ))
+        elif isinstance(ip_addr, ipaddress.IPv6Address):
+            writer.write(struct.pack(
+                '!4B16sH', 
+                self.VERSION, 
+                self.CMD_CONNECT if scheme == Scheme.tcp else self.CMD_UDP_ASSOCIATE,
+                0, 
+                self.ATYP_IPV6,
+                ip_addr.packed,
+                dst_port
+            ))
+        else:
+            raise ValueError('Invalid remote address "%s:%d"' % remote_addr)
+
+        await writer.drain()
+        _, rep, _, atype,  = struct.unpack('!4B', await reader.readexactly(4))
+
+        if rep != self.REP_SUCCESS:
+            raise ConnectionError('Failed to connection remote address "%s:%d"' % remote_addr)
+
+        if atype == self.ATYP_IPV4:
+            bind_addr, bind_port = struct.unpack('!4sH', await reader.readexactly(6))
+            bind_addr = str(ipaddress.IPv4Address(bind_addr))
+        elif atype == self.ATYP_IPV6:
+            bind_addr, bind_port = struct.unpack('!16sH', await reader.readexactly(18))
+            bind_addr = str(ipaddress.IPv6Address(bind_addr))
+        else:
+            raise ConnectionError('Invalid response atype')
+
+        if scheme != Scheme.udp and (bind_addr != self.host or bind_port != self.port):
+            raise ConnectionError('Relay mode does not supported')
+
+        return bind_addr, bind_port
+
+    async def handshake(self, reader, writer, remote_addr):
+        try:
+            await self._handshake(reader, writer, remote_addr, Scheme.tcp)
+        except ConnectionError:
+            return False
+
+        return True
+
+    #async def udp_tunnel(self, )
 
 
 def parse_proxy(url):
@@ -32,10 +153,10 @@ def parse_proxy(url):
         parsed_url.path != '/' or \
         parsed_url.query != '' or \
         parsed_url.fragment != '':
-        raise ValueError('Invalid proxy "{0}"'.format(url))
+        raise ValueError('Invalid proxy "%s"' % (url, ))
 
     try:
-        ip_address(parsed_url.hostname)
+        ipaddress.ip_address(parsed_url.hostname)
         host = parsed_url.hostname
     except ValueError:
         host = None
@@ -46,7 +167,9 @@ def parse_proxy(url):
             parsed_url.hostname, 
             parsed_url.port if parsed_url.port \
                 else DEFAULT_HTTP_PROXY_PORT,
-            host
+            host,
+            parsed_url.username,
+            parsed_url.password
         )
     elif parsed_url.scheme == 'socks5':
         return Socks5Proxy(
@@ -54,7 +177,9 @@ def parse_proxy(url):
             parsed_url.hostname, 
             parsed_url.port if parsed_url.port \
                 else DEFAULT_SOCKS5_PROXY_PORT,
-            host
+            host,
+            parsed_url.username,
+            parsed_url.password
         )
     else:
-        raise ValueError('Invalid proxy scheme "{0}" in "{1}"'.format(url, parsed_url.scheme))
+        raise ValueError('Invalid proxy scheme "%s" in "%s"' % (parsed_url.scheme, url))

@@ -126,7 +126,7 @@ class Config:
             for key_node in key_nodes:
                 value = value[key_node]
         except (KeyError, TypeError):
-            logging.debug('Configure item "{0}" not found'.format(key))
+            logging.debug('Configure item "%s" not found' % (key, ))
             return None
 
         return value
@@ -143,8 +143,10 @@ class Config:
         conf = merge_dict_recursive(conf, DEFAULT_CONFIG)
 
         try:
-            conf['upstreams'] = [parse_upstream(_) for _ in conf['upstreams']]
             conf['proxy'] = parse_proxy(conf.get('proxy'))
+            conf['upstreams'] = [parse_upstream(_) for _ in conf['upstreams'] \
+                                    if not _.get('disable', False)]
+            conf['upstreams'].sort(reverse=True, key=lambda upstm: upstm.priority)
         except ValueError as e:
             raise InvalidConfig(e)
 

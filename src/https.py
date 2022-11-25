@@ -48,8 +48,11 @@ class Response:
         if self.headers.get('Transfer-Encoding') == 'chunked':
             self.body = await self._reader.readuntil(b'\r\n\r\n')
         else:
-            content_length = int(self.headers['Content-Length'])
-            self.body = await self._reader.readexactly(content_length)
+            try:
+                content_length = int(self.headers['Content-Length'])
+                self.body = await self._reader.readexactly(content_length)
+            except TypeError:
+                pass
         return self
 
     def __repr__(self):
@@ -69,3 +72,14 @@ async def get(host, port, hostname, url, headers=[]):
     finally:
         writer.transport.close()
     return response
+
+
+class Client:
+    def __init__(self, conn):
+        self.conn = conn
+
+    async def get(self, url, hostname, headers=[]):
+        conn = self.conn
+        await Request(HTTPMethod.GET, url, hostname, headers).send_to(conn.writer)
+        response = await Response(conn.reader).end()
+        return response

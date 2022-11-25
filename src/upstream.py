@@ -26,6 +26,7 @@ class Upstream:
         self.proxy = kwargs.get('proxy')
         self.timeout = kwargs.get('timeout')
         self.group = kwargs.get('group')
+        self.priority = kwargs.get('priority', 0)
         self.stats = Stats()
 
     def __repr__(self):
@@ -83,7 +84,7 @@ def parse_upstream(server):
         try:
             return upstream_class(**server)
         except KeyError as e:
-            raise ValueError('Missing config key "{0}" in "{1}"'.format(e.args[0], server))
+            raise ValueError('Missing config key "%s" in "%s"' % (e.args[0], server))
     elif not isinstance(server, str):
         raise TypeError('Parameter server must be dict or string')
 
@@ -106,4 +107,4 @@ def parse_upstream(server):
                                    if parsed_url.port is None \
                                    else parsed_url.port)
 
-    raise ValueError('Invalid upstream format "{0}"'.format(server))
+    raise ValueError('Invalid upstream format "%s"' % (server, ))
