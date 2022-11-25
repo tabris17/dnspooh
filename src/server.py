@@ -144,7 +144,7 @@ class Server:
                 raise NotImplementedError('Unspported upstream')
             try:
                 response = await asyncio.wait_for(
-                    resolver(data, upstream), 
+                    asyncio.shield(resolver(data, upstream)), 
                     self.timeout if upstream.timeout is None else upstream.timeout
                 )
                 if response is not None:
