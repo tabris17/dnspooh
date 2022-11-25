@@ -35,6 +35,9 @@ class Connection:
         self.writer = writer
         self.exc = None
         self.idle = True
+        
+    def register(self, protocol):
+        protocol.conn = self
 
     def __enter__(self):
         self.idle = False
@@ -60,7 +63,7 @@ class Pool:
         self.loop = asyncio.get_running_loop() if loop is None else loop
 
     def add(self, conn):
-        if self.DEFAULT_SIZE <= self.total or conn.is_closing():
+        if self.DEFAULT_SIZE <= self.total:
             return False
         if conn.name in self.conns:
             if conn in self.conns[conn.name]:
@@ -122,10 +125,15 @@ class Pool:
             except ssl.SSLError as exc:
                 raise ConnectionError('Failed to establish tls connection: %s' % (exc, ))
 
-        protocol.conn = conn = Connection(conn_name, reader, writer)
-        if not self.add(conn):
+        #protocol.conn = conn = Connection(conn_name, reader, writer)
+        #if not self.add(conn):
+            #raise ConnectionError('Fail to connect "%s"' % (conn_name, ))
+        conn = Connection(conn_name, reader, writer)
+        if conn.is_closing():
             raise ConnectionError('Fail to connect "%s"' % (conn_name, ))
-
+    
+        if self.add(conn):
+            conn.register(protocol)
         return conn
 
     @staticmethod
