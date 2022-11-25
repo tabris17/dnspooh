@@ -107,12 +107,13 @@ class Server:
             Scheme.tls, 
             self.proxy if upstream.proxy is None else upstream.proxy
         )
-        q = base64.b64encode(query).decode().rstrip('=')
-        return (await https.Client(conn).get(
-            upstream.path + '?dns=' + q, 
-            upstream.hostname, 
-            [("Content-type", "application/dns-message")]
-        )).body
+        with conn:
+            q = base64.b64encode(query).decode().rstrip('=')
+            return (await https.Client(conn).get(
+                upstream.path + '?dns=' + q, 
+                upstream.hostname, 
+                [("Content-type", "application/dns-message")]
+            )).body
 
     async def resolve_by_tls(self, query, upstream):
         conn = await self.pool.connect(
@@ -121,12 +122,13 @@ class Server:
             Scheme.tls, 
             self.proxy if upstream.proxy is None else upstream.proxy
         )
-        query_size = struct.pack('!H', len(query))
-        conn.writer.write(query_size + query)
-        await conn.writer.drain()
-        response_head = await conn.reader.readexactly(2)
-        response_size = struct.unpack('!H', response_head)[0]
-        return await conn.reader.readexactly(response_size)
+        with conn:
+            query_size = struct.pack('!H', len(query))
+            conn.writer.write(query_size + query)
+            await conn.writer.drain()
+            response_head = await conn.reader.readexactly(2)
+            response_size = struct.unpack('!H', response_head)[0]
+            return await conn.reader.readexactly(response_size)
 
     async def handle(self, request, **kwargs):
         response = None
