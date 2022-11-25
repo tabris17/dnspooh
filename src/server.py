@@ -22,7 +22,6 @@ class ServerProtocol(asyncio.DatagramProtocol):
         self.transport = transport
 
     def datagram_received(self, data, addr):
-        logging.debug('Received request from %s:%d' % addr)
         self.loop.create_task(self.server.on_request(data, addr))
 
 
@@ -155,6 +154,7 @@ class Server:
 
     async def on_request(self, data, addr):
         request = DNSRecord.parse(data)
+        logging.debug('Received request from %s:%d; qname=%s; qtype=%s' % (addr + (request.q.qname, request.q.qtype)))
         response = await (self.middleware if self.middleware else self).handle(request)
         if response is None:
             logging.info('Failed to resolve domain name "%s", upstream servers are unreachable' % (request.q.qname, ))
