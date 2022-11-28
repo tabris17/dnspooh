@@ -61,6 +61,9 @@ DEFAULT_CONFIG = {
 }
 
 
+logger = logging.getLogger(__name__)
+
+
 def load_from_file(file):
     with open(file, 'r') as stream:
         return yaml.load(stream, Loader=Loader)
@@ -126,7 +129,7 @@ class Config:
             for key_node in key_nodes:
                 value = value[key_node]
         except (KeyError, TypeError):
-            logging.debug('Configure item "%s" not found' % (key, ))
+            logger.warn('Configure item "%s" not found', key)
             return None
 
         return value

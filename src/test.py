@@ -11,7 +11,8 @@ async def main():
     conn = await pool.connect('112.80.248.75', 443, Scheme.tls, proxy)
     https_client = https.Client(conn)
     response = await https_client.get('/', 'www.baidu.com')
-    print(response)
+    #print(response)
+    response = await https_client.get('/', 'www.baidu.com')
 
 if __name__ == '__main__':
     logging.basicConfig(

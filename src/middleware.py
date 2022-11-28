@@ -5,6 +5,9 @@ from cachetools import TTLCache
 from dnslib import QTYPE
 
 
+logger = logging.getLogger(__name__)
+
+
 class Middleware:
     def __init__(self, next):
         self.next = next
@@ -27,10 +30,10 @@ class CacheMiddleware(Middleware):
 
         cache_key = '%s;%s' % (request.q.qname, QTYPE[request.q.qtype])
         if cache_key in self.cache:
-            logging.debug('Cache hit "%s"' % (cache_key, ))
+            logger.debug('Cache hit "%s"', cache_key)
             return self.cache[cache_key]
 
-        logging.debug('Cache miss "%s"' % (cache_key, ))
+        logger.debug('Cache miss "%s"', cache_key)
         response = await super().handle(request)
         if response is not None:
             self.cache[cache_key] = response

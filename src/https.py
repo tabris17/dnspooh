@@ -1,10 +1,13 @@
-import asyncio
 import io
 import logging
-import ssl
 import email.parser
+import email.policy
+
 from http import HTTPStatus, HTTPMethod
 from http.client import HTTPMessage
+
+
+logger = logging.getLogger(__name__)
 
 
 class Request:
@@ -14,7 +17,7 @@ class Request:
         self.method = method
         self.url = url
         self.host = host
-        self.headers = HTTPMessage()
+        self.headers = HTTPMessage(email.policy.HTTP)
         self.headers.add_header('Host', host)
         self.headers.add_header('Accept-Encoding', 'identity')
         self.headers.add_header('Connection', 'keep-alive')
@@ -23,10 +26,13 @@ class Request:
 
     def as_bytes(self):
         method_header = '%s %s %s\r\n' % (self.method, self.url, self.HTTP_VERSION)
-        return method_header.encode() + self.headers.as_bytes() + b'\r\n'
+        return method_header.encode() + self.headers.as_bytes()
 
     def __bytes__(self):
         return self.as_bytes()
+
+    def __repr__(self):
+        return self.as_bytes().decode()
 
     async def send_to(self, writer):
         writer.write(self.as_bytes())
@@ -56,22 +62,7 @@ class Response:
         return self
 
     def __repr__(self):
-        return self.status + str(self.headers) + str(self.body)
-
-
-async def get(host, port, hostname, url, headers=[]):
-    reader, writer = await asyncio.open_connection(
-        host, 
-        port, 
-        ssl=ssl.create_default_context(),
-        server_hostname=hostname
-    )
-    try:
-        await Request(HTTPMethod.GET, url, hostname, headers).send_to(writer)
-        response = await Response(reader).end()
-    finally:
-        writer.transport.close()
-    return response
+        return self.status + str(self.headers) + ('(None)' if self.body is None else str(self.body))
 
 
 class Client:
@@ -80,6 +71,9 @@ class Client:
 
     async def get(self, url, hostname, headers=[]):
         conn = self.conn
-        await Request(HTTPMethod.GET, url, hostname, headers).send_to(conn.writer)
+        request = Request(HTTPMethod.GET, url, hostname, headers)
+        logger.debug('Request:\n%s', request)
+        await request.send_to(conn.writer)
         response = await Response(conn.reader).end()
+        logger.debug('Response:\n%s', response)
         return response

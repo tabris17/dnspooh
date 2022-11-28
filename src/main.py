@@ -36,7 +36,7 @@ def parse_arguments():
 def init_logging(level):
     logging.basicConfig(
         level=level,
-        format="%(asctime)s [%(levelname)s] %(message)s",
+        format="%(asctime)s [%(name)s.%(levelname)s] %(message)s",
         handlers=[logging.StreamHandler()]
     )
 
@@ -51,8 +51,7 @@ async def main():
 
     debug = config['debug']
     init_logging(level=logging.DEBUG if debug else logging.INFO)
-    main_loop = asyncio.get_running_loop()
-    main_loop.set_debug(debug)
+    #asyncio.get_running_loop().set_debug(debug)
 
     server = Server(config)
     await server.run()

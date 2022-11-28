@@ -2,6 +2,7 @@ import asyncio
 import base64
 import logging
 import struct
+import functools
 
 from dnslib import DNSRecord
 
@@ -12,17 +13,19 @@ from pool import Pool
 from scheme import Scheme
 
 
+logger = logging.getLogger(__name__)
+
+
 class ServerProtocol(asyncio.DatagramProtocol):
     def __init__(self, server):
         super().__init__()
-        self.loop = asyncio.get_running_loop()
         self.server = server
 
     def connection_made(self, transport):
         self.transport = transport
 
     def datagram_received(self, data, addr):
-        self.loop.create_task(self.server.on_request(data, addr))
+        self.server.on_request(data, addr)
 
 
 class QueryProtocol(asyncio.DatagramProtocol):
@@ -48,7 +51,7 @@ class Server:
         self.abort_event = asyncio.Event()
         self.middleware = None # CacheMiddleware(RuleMiddleware(self), 4096, 5000)
         self.transport = None
-        logging.debug('Serivce initialized')
+        logger.debug('Serivce initialized')
 
     async def bootstrap(self, host, port, timeout, upstreams, proxy):
         self.host = host
@@ -85,7 +88,7 @@ class Server:
                 raise RuntimeError('Failed to bootstrap: cannot resolve "%s"' % (hostname_upstream.hostname, ))
             hostname_upstream.host = str(response.rr[0].rdata)
 
-        logging.debug('Serivce bootstrapped')
+        logger.debug('Serivce bootstrapped')
 
     async def resolve_by_dns(self, query, upstream):
         response_future = self.loop.create_future()
@@ -143,27 +146,32 @@ class Server:
             else:
                 raise NotImplementedError('Unspported upstream')
             try:
-                response = await asyncio.wait_for(
+                response_data = await asyncio.wait_for(
                     asyncio.shield(resolver(data, upstream)), 
                     self.timeout if upstream.timeout is None else upstream.timeout
                 )
-                if response is not None:
+                if response_data is not None:
+                    response = DNSRecord.parse(response_data)
                     break
             except TimeoutError:
-                logging.info('Upstream server %s:%d response timeout' % upstream.to_addr())
+                logger.info('Upstream server %s:%d response timeout' % upstream.to_addr())
 
-        return DNSRecord.parse(response) if response is not None else None
+        return response
 
-    async def on_request(self, data, addr):
-        request = DNSRecord.parse(data)
-        logging.debug('Received request from %s:%d; qname=%s; qtype=%s' % (addr + (request.q.qname, request.q.qtype)))
-        response = await (self.middleware if self.middleware else self).handle(request)
+    def on_response(self, request, addr, future):
+        response = future.result()
         if response is None:
-            logging.info('Failed to resolve domain name "%s", upstream servers are unreachable' % (request.q.qname, ))
+            logger.info('Failed to resolve domain name "%s", upstream servers are unreachable', request.q.qname)
             return
 
-        logging.debug('Send response to %s:%d' % addr)
+        logger.debug('Send response to %s:%d\n%s' % (addr + (response, )))
         self.transport.sendto(DNSRecord.pack(response), addr)
+
+    def on_request(self, data, addr):
+        request = DNSRecord.parse(data)
+        logger.debug('Received request from %s:%d\n%s' % (addr + (request, )))
+        task = self.loop.create_task((self.middleware if self.middleware else self).handle(request))            
+        task.add_done_callback(functools.partial(self.on_response, request, addr))
 
     def abort(self):
         return self.abort_event.set()
@@ -183,15 +191,15 @@ class Server:
                 local_addr=(self.host, self.port)
             )
         except OSError as e:
-            logging.error(e)
+            logger.error(e)
             return
 
-        logging.info('Serivce started')
+        logger.info('Serivce started')
 
         try:
             await self.abort_event.wait()
         except asyncio.CancelledError:
-            logging.debug('Serivce interrupted')
+            logger.debug('Serivce interrupted')
         finally:
             self.transport.close()
-            logging.info('Serivce stopped')
+            logger.info('Serivce stopped')

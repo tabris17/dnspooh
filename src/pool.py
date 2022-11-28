@@ -5,6 +5,9 @@ import logging
 from scheme import Scheme
 
 
+logger = logging.getLogger(__name__)
+
+
 class PoolStreamReaderProtocol(asyncio.StreamReaderProtocol):
     def eof_received(self):
         super().eof_received()
@@ -35,6 +38,7 @@ class Connection:
         self.writer = writer
         self.exc = None
         self.idle = True
+        self.udp_tunnel = None
         
     def register(self, protocol):
         protocol.conn = self
@@ -50,6 +54,9 @@ class Connection:
 
     def is_closing(self):
         return self.writer.transport.is_closing()
+
+    def is_udp_tunnel(self):
+        return self.udp_tunnel is not None
 
 
 class Pool:
@@ -73,7 +80,7 @@ class Pool:
             self.conns[conn.name] = set([conn])
         self.total += 1
 
-        logging.debug('Add "%s" to connection pool' % (conn.name, ))
+        logger.debug('Add "%s" to connection pool', conn.name)
         return True
 
     def remove(self, conn):
@@ -95,7 +102,7 @@ class Pool:
 
     def on_connection_lost(self, conn):
         self.remove(conn)
-        logging.debug('Remove "%s" from connection pool' % (conn.name, ))
+        logger.debug('Remove "%s" from connection pool', conn.name)
 
     async def connect(self, host, port, 
                       scheme=Scheme.tcp, proxy=None, 
@@ -125,9 +132,6 @@ class Pool:
             except ssl.SSLError as exc:
                 raise ConnectionError('Failed to establish tls connection: %s' % (exc, ))
 
-        #protocol.conn = conn = Connection(conn_name, reader, writer)
-        #if not self.add(conn):
-            #raise ConnectionError('Fail to connect "%s"' % (conn_name, ))
         conn = Connection(conn_name, reader, writer)
         if conn.is_closing():
             raise ConnectionError('Fail to connect "%s"' % (conn_name, ))
@@ -139,5 +143,4 @@ class Pool:
     @staticmethod
     def _make_conn_name(host, port, scheme, proxy):
         name = '%s://%s:%d' % (scheme.name, host, port)
-
         return name if proxy is None else '%s/%s' % (proxy.url, name)
