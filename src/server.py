@@ -185,8 +185,7 @@ class Server:
         await self.bootstrap(host, port, timeout, upstreams, proxy)
 
         try:
-            loop = asyncio.get_running_loop()
-            self.transport, _ = await loop.create_datagram_endpoint(
+            self.transport, _ = await self.loop.create_datagram_endpoint(
                 lambda: ServerProtocol(self),
                 local_addr=(self.host, self.port)
             )
