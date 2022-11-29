@@ -3,6 +3,8 @@ import base64
 import logging
 import struct
 import functools
+import traceback
+import enum
 
 from dnslib import DNSRecord
 
@@ -21,11 +23,12 @@ class ServerProtocol(asyncio.DatagramProtocol):
         super().__init__()
         self.server = server
 
-    def connection_made(self, transport):
-        self.transport = transport
-
     def datagram_received(self, data, addr):
         self.server.on_request(data, addr)
+
+    def error_received(self, exc):
+        logger.error('Server error: %s', exc)
+        self.server.reset()
 
 
 class QueryProtocol(asyncio.DatagramProtocol):
@@ -42,8 +45,17 @@ class QueryProtocol(asyncio.DatagramProtocol):
         self.transport.close()
         self.response.set_result(data)
 
+    def error_received(self, exc):
+        logger.error('DNS query error: %s', exc)
+
 
 class Server:
+    class Status(enum.Enum):
+        initialized = enum.auto()
+        start_pedding = enum.auto()
+        running = enum.auto()
+        reset_pedding = enum.auto()
+
     def __init__(self, config):
         self.config = config
         self.pool = Pool()
@@ -51,6 +63,7 @@ class Server:
         self.abort_event = asyncio.Event()
         self.middleware = None # CacheMiddleware(RuleMiddleware(self), 4096, 5000)
         self.transport = None
+        self.status = self.Status.initialized
         logger.debug('Serivce initialized')
 
     async def bootstrap(self, host, port, timeout, upstreams, proxy):
@@ -88,15 +101,33 @@ class Server:
                 raise RuntimeError('Failed to bootstrap: cannot resolve "%s"' % (hostname_upstream.hostname, ))
             hostname_upstream.host = str(response.rr[0].rdata)
 
-        logger.debug('Serivce bootstrapped')
+    def _get_proxy(self, upstream):
+        return self.proxy if upstream.proxy is None \
+            else upstream.proxy
 
     async def resolve_by_dns(self, query, upstream):
+        await asyncio.sleep(2)
+        return
         response_future = self.loop.create_future()
         upstream_addr = upstream.to_addr()
-        transport, _ = await self.loop.create_datagram_endpoint(
-            lambda: QueryProtocol(query, response_future),
-            remote_addr=upstream_addr
-        )
+
+        proxy = self._get_proxy(upstream)
+        if proxy and proxy.can_udp_tunnel():
+            conn = await self.pool.connect(
+                upstream.host, 
+                upstream.port, 
+                Scheme.udp, 
+                proxy
+            )
+            transport, _ = await self.loop.create_datagram_endpoint(
+                lambda: QueryProtocol(query, response_future),
+                remote_addr=conn.udp_tunnel
+            )
+        else:
+            transport, _ = await self.loop.create_datagram_endpoint(
+                lambda: QueryProtocol(query, response_future),
+                remote_addr=upstream_addr
+            )
         try:
             response = await response_future
         finally:
@@ -104,13 +135,12 @@ class Server:
         return response
 
     async def resolve_by_https(self, query, upstream):
-        conn = await self.pool.connect(
+        with await self.pool.connect(
             upstream.host, 
             upstream.port, 
             Scheme.tls, 
-            self.proxy if upstream.proxy is None else upstream.proxy
-        )
-        with conn:
+            self._get_proxy(upstream)
+        ) as conn:
             q = base64.b64encode(query).decode().rstrip('=')
             return (await https.Client(conn).get(
                 upstream.path + '?dns=' + q, 
@@ -119,13 +149,12 @@ class Server:
             )).body
 
     async def resolve_by_tls(self, query, upstream):
-        conn = await self.pool.connect(
+        with await self.pool.connect(
             upstream.host, 
             upstream.port, 
             Scheme.tls, 
-            self.proxy if upstream.proxy is None else upstream.proxy
-        )
-        with conn:
+            self._get_proxy(upstream)
+        ) as conn:
             query_size = struct.pack('!H', len(query))
             conn.writer.write(query_size + query)
             await conn.writer.drain()
@@ -134,7 +163,6 @@ class Server:
             return await conn.reader.readexactly(response_size)
 
     async def handle(self, request, **kwargs):
-        response = None
         data = DNSRecord.pack(request)
         for upstream in (self.upstreams if 'upstreams' not in kwargs else kwargs['upstreams']):
             if isinstance(upstream, DnsUpstream):
@@ -151,12 +179,11 @@ class Server:
                     self.timeout if upstream.timeout is None else upstream.timeout
                 )
                 if response_data is not None:
-                    response = DNSRecord.parse(response_data)
-                    break
+                    return DNSRecord.parse(response_data)
             except TimeoutError:
                 logger.info('Upstream server %s:%d response timeout' % upstream.to_addr())
-
-        return response
+            except:
+                logger.warning('Resolver error:\n%s', traceback.format_exc())
 
     def on_response(self, request, addr, future):
         response = future.result()
@@ -174,9 +201,16 @@ class Server:
         task.add_done_callback(functools.partial(self.on_response, request, addr))
 
     def abort(self):
+        logger.debug('Serivce aborted')
+        return self.abort_event.set()
+
+    def reset(self):
+        logger.debug('Serivce reset')
+        self.status = self.Status.reset_pedding
         return self.abort_event.set()
 
     async def run(self):
+        self.status = self.Status.start_pedding
         host = self.config['host']
         port = self.config['port']
         timeout = self.config['timeout']
@@ -189,14 +223,29 @@ class Server:
                 lambda: ServerProtocol(self),
                 local_addr=(self.host, self.port)
             )
-        except OSError as e:
-            logger.error(e)
+        except OSError as exc:
+            logger.error('Failed to start service: %s', exc)
             return
 
+        self.status = self.Status.running
         logger.info('Serivce started')
 
         try:
-            await self.abort_event.wait()
+            while True:
+                if self.status == self.Status.running:
+                    await self.abort_event.wait()
+                elif self.status == self.Status.reset_pedding:
+                    logger.debug('reset')
+                    self.abort_event.clear()
+                    self.transport.close()
+                    self.transport, _ = await self.loop.create_datagram_endpoint(
+                        lambda: ServerProtocol(self),
+                        local_addr=(self.host, self.port)
+                    )
+                    self.status = self.Status.running
+                    await self.abort_event.wait()
+                else:
+                    break
         except asyncio.CancelledError:
             logger.debug('Serivce interrupted')
         finally:

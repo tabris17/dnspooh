@@ -27,6 +27,9 @@ class Proxy:
         return self.username is not None and \
                self.password is not None
 
+    def can_udp_tunnel(self):
+        return False
+
     async def handshake(self, reader, writer, remote_addr):
         raise NotImplementedError()
 
@@ -58,6 +61,9 @@ class Socks5Proxy(Proxy):
     ATYP_IPV4 = 1
     ATYP_IPV6 = 4
     REP_SUCCESS = 0
+
+    def can_udp_tunnel(self):
+        return True
 
     async def _handshake(self, reader, writer, remote_addr, scheme=Scheme.tcp):
         writer.write(struct.pack('!3B', self.VERSION, 1, self.AUTH_METHOD))
@@ -141,7 +147,8 @@ class Socks5Proxy(Proxy):
 
         return True
 
-    #async def udp_tunnel(self, )
+    async def udp_tunnel(self, reader, writer, remote_addr):
+        return await self._handshake(reader, writer, remote_addr, Scheme.udp)
 
 
 def parse_proxy(url):

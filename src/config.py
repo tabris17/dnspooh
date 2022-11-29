@@ -129,7 +129,7 @@ class Config:
             for key_node in key_nodes:
                 value = value[key_node]
         except (KeyError, TypeError):
-            logger.warn('Configure item "%s" not found', key)
+            logger.warning('Configure item "%s" not found', key)
             return None
 
         return value

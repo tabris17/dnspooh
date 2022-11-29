@@ -32,21 +32,28 @@ class PoolStreamReaderProtocol(asyncio.StreamReaderProtocol):
 
 
 class Connection:
-    def __init__(self, name, reader, writer):
+    def __init__(self, name, reader, writer, udp_tunnel=None):
         self.name = name
         self.reader = reader
         self.writer = writer
+        self.udp_tunnel = udp_tunnel
         self.exc = None
         self.idle = True
-        self.udp_tunnel = None
-        
-    def register(self, protocol):
-        protocol.conn = self
+
+    def is_wild(self):
+        return self.writer.transport\
+            .get_protocol().conn is None
+
+    def register(self):
+        self.writer.transport.get_protocol().conn = self
 
     def __enter__(self):
         self.idle = False
+        return self
 
     def __exit__(self, exc_type, exc_value, traceback):
+        if exc_type is not None:
+            self.writer.transport.close()
         self.idle = True
 
     def __repr__(self):
@@ -72,6 +79,10 @@ class Pool:
     def add(self, conn):
         if self.DEFAULT_SIZE <= self.total:
             return False
+
+        if conn.is_closing():
+            raise ConnectionError('Fail to connect "%s"' % (conn.name, ))
+
         if conn.name in self.conns:
             if conn in self.conns[conn.name]:
                 return False
@@ -79,7 +90,7 @@ class Pool:
         else:
             self.conns[conn.name] = set([conn])
         self.total += 1
-
+        conn.register()
         logger.debug('Add "%s" to connection pool', conn.name)
         return True
 
@@ -118,8 +129,15 @@ class Pool:
             transport, _ = await self.loop.create_connection(
                 lambda: protocol, proxy.host, proxy.port, **kwds)
             writer = asyncio.StreamWriter(transport, protocol, reader, self.loop)
+            if scheme == Scheme.udp:
+                tunnel_addr, tunnel_port = await proxy.udp_tunnel(reader, writer, (host, port))
+                conn = Connection(conn_name, reader, writer, (tunnel_addr, tunnel_port))
+                self.add(conn)
+                return conn
             if not await proxy.handshake(reader, writer, (host, port)):
                 raise ConnectionError('Failed to handshake with proxy "%s"' % (proxy.url, ))
+        elif scheme == Scheme.udp:
+            raise ConnectionError('Naked UDP protocol does not supported')
         else:
             transport, _ = await self.loop.create_connection(
                 lambda: protocol, host, port, **kwds)
@@ -133,11 +151,7 @@ class Pool:
                 raise ConnectionError('Failed to establish tls connection: %s' % (exc, ))
 
         conn = Connection(conn_name, reader, writer)
-        if conn.is_closing():
-            raise ConnectionError('Fail to connect "%s"' % (conn_name, ))
-    
-        if self.add(conn):
-            conn.register(protocol)
+        self.add(conn)
         return conn
 
     @staticmethod

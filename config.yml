@@ -1,5 +1,5 @@
 proxy: http://127.0.0.1:7890
-timeout: 1000
+timeout: 5
 
 cache: 
   max_size: 4096
@@ -11,7 +11,7 @@ plugins:
 upstreams:
   - name: 114dns
     host: 114.114.114.114
-    priority: 0
+    priority: 11
 
   - name: baidu
     host: 180.76.76.76
