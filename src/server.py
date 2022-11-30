@@ -28,8 +28,11 @@ class ServerProtocol(asyncio.DatagramProtocol):
 
     def error_received(self, exc):
         logger.error('Server error: %s', exc)
-        self.server.reset()
+        self.server.transport.close()
 
+    def connection_lost(self, exc):
+        super().connection_lost(exc)
+        self.server.try_restart()
 
 class QueryProtocol(asyncio.DatagramProtocol):
     def __init__(self, data, response):
@@ -54,7 +57,9 @@ class Server:
         initialized = enum.auto()
         start_pedding = enum.auto()
         running = enum.auto()
-        reset_pedding = enum.auto()
+        restart_pedding = enum.auto()
+        stop_pedding = enum.auto()
+        stopped = enum.auto()
 
     def __init__(self, config):
         self.config = config
@@ -105,7 +110,7 @@ class Server:
         return self.proxy if upstream.proxy is None \
             else upstream.proxy
 
-    async def resolve_by_dns(self, query, upstream):
+    async def _resolve_by_dns(self, query, upstream):
         await asyncio.sleep(2)
         return
         response_future = self.loop.create_future()
@@ -134,7 +139,7 @@ class Server:
             transport.close()
         return response
 
-    async def resolve_by_https(self, query, upstream):
+    async def _resolve_by_https(self, query, upstream):
         with await self.pool.connect(
             upstream.host, 
             upstream.port, 
@@ -148,7 +153,7 @@ class Server:
                 [("Content-type", "application/dns-message")]
             )).body
 
-    async def resolve_by_tls(self, query, upstream):
+    async def _resolve_by_tls(self, query, upstream):
         with await self.pool.connect(
             upstream.host, 
             upstream.port, 
@@ -166,11 +171,11 @@ class Server:
         data = DNSRecord.pack(request)
         for upstream in (self.upstreams if 'upstreams' not in kwargs else kwargs['upstreams']):
             if isinstance(upstream, DnsUpstream):
-                resolver = self.resolve_by_dns
+                resolver = self._resolve_by_dns
             elif isinstance(upstream, HttpsUpstream):
-                resolver = self.resolve_by_https
+                resolver = self._resolve_by_https
             elif isinstance(upstream, TlsUpstream):
-                resolver = self.resolve_by_tls
+                resolver = self._resolve_by_tls
             else:
                 raise NotImplementedError('Unspported upstream')
             try:
@@ -201,13 +206,24 @@ class Server:
         task.add_done_callback(functools.partial(self.on_response, request, addr))
 
     def abort(self):
-        logger.debug('Serivce aborted')
+        self.status = self.Status.stop_pedding
+        logger.info('Serivce aborted')
         return self.abort_event.set()
 
-    def reset(self):
-        logger.debug('Serivce reset')
-        self.status = self.Status.reset_pedding
-        return self.abort_event.set()
+    async def restart(self):
+        self.status = self.Status.restart_pedding
+        logger.info('Restarting service')
+        self.transport, _ = await self.loop.create_datagram_endpoint(
+            lambda: ServerProtocol(self),
+            local_addr=(self.host, self.port)
+        )
+        self.status = self.Status.running
+        logger.info('Service restarted')
+
+    def try_restart(self):
+        if self.status != self.Status.running:
+            return
+        self.loop.create_task(self.restart())
 
     async def run(self):
         self.status = self.Status.start_pedding
@@ -231,23 +247,10 @@ class Server:
         logger.info('Serivce started')
 
         try:
-            while True:
-                if self.status == self.Status.running:
-                    await self.abort_event.wait()
-                elif self.status == self.Status.reset_pedding:
-                    logger.debug('reset')
-                    self.abort_event.clear()
-                    self.transport.close()
-                    self.transport, _ = await self.loop.create_datagram_endpoint(
-                        lambda: ServerProtocol(self),
-                        local_addr=(self.host, self.port)
-                    )
-                    self.status = self.Status.running
-                    await self.abort_event.wait()
-                else:
-                    break
+            await self.abort_event.wait()
         except asyncio.CancelledError:
             logger.debug('Serivce interrupted')
         finally:
             self.transport.close()
+            self.status = self.Status.stopped
             logger.info('Serivce stopped')
