@@ -72,8 +72,8 @@ class Client:
     async def get(self, url, hostname, headers=[]):
         conn = self.conn
         request = Request(HTTPMethod.GET, url, hostname, headers)
-        logger.debug('Request:\n%s', request)
+        logger.debug('HTTP request:\n%s', request)
         await request.send_to(conn.writer)
         response = await Response(conn.reader).end()
-        logger.debug('Response:\n%s', response)
+        logger.debug('HTTP response:\n%s', response)
         return response

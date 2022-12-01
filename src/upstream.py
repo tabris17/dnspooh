@@ -1,3 +1,4 @@
+from collections import namedtuple
 from urllib.parse import urlsplit
 from ipaddress import ip_address
 
@@ -10,8 +11,25 @@ DEFAULT_HTTPS_PORT = 443
 
 
 class Stats:
+    Record = namedtuple('Record', ['datetime', 'success', 'time_cost'])
+
+    def __init__(self):
+        self.usage = 0
+        self.failure = 0
+        self.success = 0
+        self.last_access = None
+
     def __repr__(self):
         return str(vars(self))
+
+    def log(self):
+        pass
+
+    def error(self):
+        pass
+
+    def timeout(self):
+        pass
 
 
 class Upstreams:

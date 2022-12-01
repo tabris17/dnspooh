@@ -34,6 +34,7 @@ class ServerProtocol(asyncio.DatagramProtocol):
         super().connection_lost(exc)
         self.server.try_restart()
 
+
 class QueryProtocol(asyncio.DatagramProtocol):
     def __init__(self, data, response):
         super().__init__()
@@ -99,25 +100,28 @@ class Server:
                 else:
                     grouped_upstreams[upstream.group] = [upstream]
 
-        for hostname_upstream in hostname_upstreams:
+        async def resolve_upstream_hostname(hostname_upstream, bootstrap_upstreams):
             request = DNSRecord.question(hostname_upstream.hostname)
             response = await self.handle(request, upstreams=bootstrap_upstreams)
             if not response or response.header.a == 0:
                 raise RuntimeError('Failed to bootstrap: cannot resolve "%s"' % (hostname_upstream.hostname, ))
             hostname_upstream.host = str(response.rr[0].rdata)
 
+        await asyncio.gather(*[
+            resolve_upstream_hostname(hostname_upstream, bootstrap_upstreams) \
+                for hostname_upstream in hostname_upstreams
+        ])
+
     def _get_proxy(self, upstream):
         return self.proxy if upstream.proxy is None \
             else upstream.proxy
 
     async def _resolve_by_dns(self, query, upstream):
-        await asyncio.sleep(2)
-        return
         response_future = self.loop.create_future()
         upstream_addr = upstream.to_addr()
 
         proxy = self._get_proxy(upstream)
-        if proxy and proxy.can_udp_tunnel():
+        if proxy and proxy.udp_tunnel_enabled():
             conn = await self.pool.connect(
                 upstream.host, 
                 upstream.port, 
@@ -125,14 +129,25 @@ class Server:
                 proxy
             )
             transport, _ = await self.loop.create_datagram_endpoint(
-                lambda: QueryProtocol(query, response_future),
-                remote_addr=conn.udp_tunnel
+                lambda: QueryProtocol(
+                    conn.udp_tunnel.pack(query, upstream_addr), 
+                    response_future
+                ),
+                remote_addr=conn.udp_tunnel.addr
             )
-        else:
-            transport, _ = await self.loop.create_datagram_endpoint(
-                lambda: QueryProtocol(query, response_future),
-                remote_addr=upstream_addr
-            )
+            try:
+                response = conn.udp_tunnel.parse(
+                    await response_future, 
+                    upstream_addr
+                )
+            finally:
+                transport.close()
+            return response
+
+        transport, _ = await self.loop.create_datagram_endpoint(
+            lambda: QueryProtocol(query, response_future),
+            remote_addr=upstream_addr
+        )
         try:
             response = await response_future
         finally:
@@ -168,6 +183,7 @@ class Server:
             return await conn.reader.readexactly(response_size)
 
     async def handle(self, request, **kwargs):
+        logger.debug('Request received:\n%s', request)
         data = DNSRecord.pack(request)
         for upstream in (self.upstreams if 'upstreams' not in kwargs else kwargs['upstreams']):
             if isinstance(upstream, DnsUpstream):
@@ -178,13 +194,19 @@ class Server:
                 resolver = self._resolve_by_tls
             else:
                 raise NotImplementedError('Unspported upstream')
+
             try:
                 response_data = await asyncio.wait_for(
                     asyncio.shield(resolver(data, upstream)), 
                     self.timeout if upstream.timeout is None else upstream.timeout
                 )
                 if response_data is not None:
-                    return DNSRecord.parse(response_data)
+                    response = DNSRecord.parse(response_data)
+                    if request.header.id == response.header.id:
+                        logger.debug('Response responded:\n%s', response)
+                        return response
+                    else:
+                        logger.debug('Response id does not match')
             except TimeoutError:
                 logger.info('Upstream server %s:%d response timeout' % upstream.to_addr())
             except:

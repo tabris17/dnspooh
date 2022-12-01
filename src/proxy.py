@@ -27,7 +27,7 @@ class Proxy:
         return self.username is not None and \
                self.password is not None
 
-    def can_udp_tunnel(self):
+    def udp_tunnel_enabled(self):
         return False
 
     async def handshake(self, reader, writer, remote_addr):
@@ -53,16 +53,67 @@ class HttpProxy(Proxy):
 
 class Socks5Proxy(Proxy):
     VERSION = 5
+
     AUTH_METHOD = 2
+
     NONE_METHOD = 0
+
     AUTH_SUCCESS = 0
+
     CMD_CONNECT = 1
+
     CMD_UDP_ASSOCIATE = 3
+
     ATYP_IPV4 = 1
+
     ATYP_IPV6 = 4
+
     REP_SUCCESS = 0
 
-    def can_udp_tunnel(self):
+    class UDPTunnel:
+        def __init__(self, addr):
+            self.addr = addr
+
+        def parse(self, data, src_addr):
+            _, _, atype = struct.unpack('!H2B', data[:4])
+            if atype == Socks5Proxy.ATYP_IPV4:
+                _from_addr, from_port = struct.unpack('!4sH', data[4:10])
+                from_addr = (str(ipaddress.IPv4Address(_from_addr)), from_port)
+                entity_data = data[10:]
+            elif atype == Socks5Proxy.ATYP_IPV6:
+                _from_addr, from_port = struct.unpack('!16sH', data[4:22])
+                from_addr = (str(ipaddress.IPv6Address(_from_addr)), from_port)
+                entity_data = data[22:]
+            else:
+                raise ValueError('Invalid ATYPE %d received' % atype)
+            if from_addr != src_addr:
+                raise ValueError('Source address %s:%d does not match' % from_addr)
+
+            return entity_data
+
+        def pack(self, data, dst_addr):
+            ip, port = dst_addr
+            ip_addr = ipaddress.ip_address(ip)
+            if isinstance(ip_addr, ipaddress.IPv4Address):
+                pack_header = struct.pack(
+                    '!H2B4sH', 0, 0, 
+                    Socks5Proxy.ATYP_IPV4,
+                    ip_addr.packed, 
+                    port
+                )
+            elif isinstance(ip_addr, ipaddress.IPv6Address):
+                pack_header = struct.pack(
+                    '!H2B16sH', 0, 0, 
+                    Socks5Proxy.ATYP_IPV6,
+                    ip_addr.packed, 
+                    port
+                )
+            else:
+                raise ValueError('Invalid destination address "%s"' % ip)
+
+            return pack_header + data
+
+    def udp_tunnel_enabled(self):
         return True
 
     async def _handshake(self, reader, writer, remote_addr, scheme=Scheme.tcp):
@@ -147,8 +198,10 @@ class Socks5Proxy(Proxy):
 
         return True
 
-    async def udp_tunnel(self, reader, writer, remote_addr):
-        return await self._handshake(reader, writer, remote_addr, Scheme.udp)
+    async def make_udp_tunnel(self, reader, writer, remote_addr):
+        return self.UDPTunnel(
+            await self._handshake(reader, writer, remote_addr, Scheme.udp)
+        )
 
 
 def parse_proxy(url):

@@ -62,7 +62,7 @@ class Connection:
     def is_closing(self):
         return self.writer.transport.is_closing()
 
-    def is_udp_tunnel(self):
+    def udp_tunnel_enabled(self):
         return self.udp_tunnel is not None
 
 
@@ -130,8 +130,10 @@ class Pool:
                 lambda: protocol, proxy.host, proxy.port, **kwds)
             writer = asyncio.StreamWriter(transport, protocol, reader, self.loop)
             if scheme == Scheme.udp:
-                tunnel_addr, tunnel_port = await proxy.udp_tunnel(reader, writer, (host, port))
-                conn = Connection(conn_name, reader, writer, (tunnel_addr, tunnel_port))
+                conn = Connection(
+                    conn_name, reader, writer, 
+                    await proxy.make_udp_tunnel(reader, writer, (host, port))
+                )
                 self.add(conn)
                 return conn
             if not await proxy.handshake(reader, writer, (host, port)):
