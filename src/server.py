@@ -196,21 +196,25 @@ class Server:
                 raise NotImplementedError('Unspported upstream')
 
             try:
-                response_data = await asyncio.wait_for(
-                    asyncio.shield(resolver(data, upstream)), 
-                    self.timeout if upstream.timeout is None else upstream.timeout
-                )
-                if response_data is not None:
+                with upstream.stats:
+                    response_data = await asyncio.wait_for(
+                        asyncio.shield(resolver(data, upstream)), 
+                        self.timeout if upstream.timeout is None else upstream.timeout
+                    )
+                    if response_data is None: raise ValueError
                     response = DNSRecord.parse(response_data)
                     if request.header.id == response.header.id:
                         logger.debug('Response responded:\n%s', response)
                         return response
                     else:
                         logger.debug('Response id does not match')
+                        raise ValueError
+            except ValueError:
+                logger.warning('Failed to resolve by %s:%d' % upstream.to_addr())
             except TimeoutError:
                 logger.info('Upstream server %s:%d response timeout' % upstream.to_addr())
             except:
-                logger.warning('Resolver error:\n%s', traceback.format_exc())
+                logger.error('Resolver error:\n%s', traceback.format_exc())
 
     def on_response(self, request, addr, future):
         response = future.result()
