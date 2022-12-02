@@ -122,13 +122,10 @@ class Server:
         wrapped = self
         names = self.config['middlewares']
         for name in names:
-            middleware_class = middlewares.get_class(name)
-            if middleware_class is None: continue
-            kwargs = self.config[name]
-            if kwargs:
-                wrapped = middleware_class(wrapped, **self.config[name])
-            else:
-                wrapped = middleware_class(wrapped)
+            wrapped = middlewares.create_middleware(
+                name, wrapped, self.config[name]
+            )
+
         return wrapped
 
     async def _resolve_by_dns(self, query, upstream):
