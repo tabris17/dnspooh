@@ -62,7 +62,11 @@ DEFAULT_CONFIG = {
     'proxy': None,
     'stats': {
         'max_size': STATS_MAX_LEN,
-    }
+    },
+    'cache': {
+        'max_size': CACHE_MAX_SIZE,
+        'ttl': CACHE_TTL,
+    },
 }
 
 
