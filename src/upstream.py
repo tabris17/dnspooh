@@ -1,7 +1,3 @@
-import enum
-import time
-
-from collections import namedtuple, deque
 from urllib.parse import urlsplit
 from ipaddress import ip_address
 
@@ -11,43 +7,6 @@ DEFAULT_DOT_PORT = 853
 DEFAULT_DNS_PORT = 53
 
 DEFAULT_HTTPS_PORT = 443
-
-
-class Stats:
-    class Result(enum.Enum):
-        SUCCESS = enum.auto()
-        TIMEOUT = enum.auto()
-        ERROR = enum.auto()
-
-    Record = namedtuple('Record', ['datetime', 'success', 'time_cost'])
-
-    def __init__(self, maxlen):
-        self.usage = 0
-        self.failure = 0
-        self.success = 0
-        self.last_access = None
-        self.records = deque(maxlen=maxlen)
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        if isinstance(exc_type, TimeoutError):
-            success = False
-        elif exc_type is not None:
-            pass
-
-    def __repr__(self):
-        return str(vars(self))
-
-    def log(self, time_cost):
-        self.records.append(self.Record(time.time(), True, time_cost))
-
-    def error(self):
-        pass
-
-    def timeout(self):
-        pass
 
 
 class Upstreams:
@@ -63,13 +22,17 @@ class Upstream:
         self.timeout = kwargs.get('timeout')
         self.group = kwargs.get('group')
         self.priority = kwargs.get('priority', 0)
-        self.stats = Stats(100)
+        self.success = 0
+        self.usage = 0
 
     def __repr__(self):
         return str(vars(self))
 
     def to_addr(self):
         return (self.host, self.port)
+
+    def health(self, threshold):
+        pass
 
 
 class DnsUpstream(Upstream):

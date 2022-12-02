@@ -1,26 +1,16 @@
-import asyncio
 import logging
 
 from cachetools import TTLCache
 from dnslib import QTYPE
 
+from . import Middleware
+
 
 logger = logging.getLogger(__name__)
 
 
-class Middleware:
-    def __init__(self, next):
-        self.next = next
-
-    def abort(self):
-        return self.next.abort()
-
-    async def handle(self, request, **kwarg):
-        return await self.next.handle(request, **kwarg)
-
-
 class CacheMiddleware(Middleware):
-    def __init__(self, next, max_size, ttl):
+    def __init__(self, next, max_size=1024, ttl=3600):
         super().__init__(next)
         self.cache = TTLCache(maxsize=max_size, ttl=ttl)
 
@@ -31,14 +21,12 @@ class CacheMiddleware(Middleware):
         cache_key = '%s;%s' % (request.q.qname, QTYPE[request.q.qtype])
         if cache_key in self.cache:
             logger.debug('Cache hit "%s"', cache_key)
-            return self.cache[cache_key]
+            response = self.cache[cache_key]
+            response.header.id = request.header.id
+            return response
 
         logger.debug('Cache miss "%s"', cache_key)
         response = await super().handle(request)
         if response is not None:
             self.cache[cache_key] = response
         return response
-
-
-class RuleMiddleware(Middleware):
-    pass

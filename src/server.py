@@ -3,16 +3,17 @@ import base64
 import logging
 import struct
 import functools
-import traceback
 import enum
 
-from dnslib import DNSRecord
+from dnslib import DNSRecord, DNSError
 
 import https
+import middlewares
 from config import DnsUpstream, HttpsUpstream, TlsUpstream
-from middleware import *
 from pool import Pool
 from scheme import Scheme
+from exceptions import EmptyValueError, UnexpectedValueError
+from stats import Stats
 
 
 logger = logging.getLogger(__name__)
@@ -67,8 +68,9 @@ class Server:
         self.pool = Pool()
         self.loop = asyncio.get_running_loop()
         self.abort_event = asyncio.Event()
-        self.middleware = None # CacheMiddleware(RuleMiddleware(self), 4096, 5000)
+        self.middleware = self._create_middlewares()
         self.transport = None
+        self.stats = Stats(config['stats.max_size'])
         self.status = self.Status.initialized
         logger.debug('Serivce initialized')
 
@@ -115,6 +117,19 @@ class Server:
     def _get_proxy(self, upstream):
         return self.proxy if upstream.proxy is None \
             else upstream.proxy
+
+    def _create_middlewares(self):
+        wrapped = self
+        names = self.config['middlewares']
+        for name in names:
+            middleware_class = middlewares.get_class(name)
+            if middleware_class is None: continue
+            kwargs = self.config[name]
+            if kwargs:
+                wrapped = middleware_class(wrapped, **self.config[name])
+            else:
+                wrapped = middleware_class(wrapped)
+        return wrapped
 
     async def _resolve_by_dns(self, query, upstream):
         response_future = self.loop.create_future()
@@ -183,7 +198,7 @@ class Server:
             return await conn.reader.readexactly(response_size)
 
     async def handle(self, request, **kwargs):
-        logger.debug('Request received:\n%s', request)
+        logger.debug('DNS query:\n%s', request)
         data = DNSRecord.pack(request)
         for upstream in (self.upstreams if 'upstreams' not in kwargs else kwargs['upstreams']):
             if isinstance(upstream, DnsUpstream):
@@ -196,25 +211,26 @@ class Server:
                 raise NotImplementedError('Unspported upstream')
 
             try:
-                with upstream.stats:
+                with self.stats.record(upstream):
                     response_data = await asyncio.wait_for(
                         asyncio.shield(resolver(data, upstream)), 
                         self.timeout if upstream.timeout is None else upstream.timeout
                     )
-                    if response_data is None: raise ValueError
-                    response = DNSRecord.parse(response_data)
-                    if request.header.id == response.header.id:
-                        logger.debug('Response responded:\n%s', response)
-                        return response
-                    else:
-                        logger.debug('Response id does not match')
-                        raise ValueError
+                    if response_data is None:
+                        raise EmptyValueError('Empty response data received')
+                    try:
+                        response = DNSRecord.parse(response_data)
+                    except DNSError:
+                        raise UnexpectedValueError('Invalid response data received')
+                    if request.header.id != response.header.id:
+                        raise UnexpectedValueError('Response id does not match')
+                    logger.debug('DNS response:\n%s', response)
+                    return response
+
             except ValueError:
                 logger.warning('Failed to resolve by %s:%d' % upstream.to_addr())
             except TimeoutError:
                 logger.info('Upstream server %s:%d response timeout' % upstream.to_addr())
-            except:
-                logger.error('Resolver error:\n%s', traceback.format_exc())
 
     def on_response(self, request, addr, future):
         response = future.result()

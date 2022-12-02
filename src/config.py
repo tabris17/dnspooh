@@ -20,6 +20,8 @@ CACHE_MAX_SIZE = 4096
 
 CACHE_TTL = 3600
 
+STATS_MAX_LEN = 1000
+
 BUILTIN_UPSTREAMS = [
     {
         'name': 'google-1',
@@ -58,6 +60,9 @@ DEFAULT_CONFIG = {
     'timeout': UPSTREAM_TIMEOUT,
     'upstreams': BUILTIN_UPSTREAMS,
     'proxy': None,
+    'stats': {
+        'max_size': STATS_MAX_LEN,
+    }
 }
 
 

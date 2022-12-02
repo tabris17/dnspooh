@@ -1,12 +1,13 @@
 proxy: socks5://127.0.0.1:7890
 timeout: 5
 
-cache: 
-  max_size: 4096
-  ttl: 3600
+stats:
+  max_size: 200
 
-plugins:
+middlewares:
   - cache
+
+
 
 upstreams:
   - name: 114dns
