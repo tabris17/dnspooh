@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class CacheMiddleware(Middleware):
-    def __init__(self, next, max_size=1024, ttl=3600):
+    def __init__(self, next, max_size, ttl):
         super().__init__(next)
         self.cache = TTLCache(maxsize=max_size, ttl=ttl)
 
