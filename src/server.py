@@ -262,7 +262,7 @@ class Server:
     def try_restart(self):
         if self.status != self.Status.running:
             return
-        self.loop.create_task(self.restart())
+        return self.loop.create_task(self.restart())
 
     async def run(self):
         self.status = self.Status.start_pedding
