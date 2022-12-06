@@ -72,6 +72,7 @@ class Server:
         self.transport = None
         self.stats = Stats(config['stats.max_size'])
         self.status = self.Status.initialized
+        self.schedule = []
         logger.debug('Serivce initialized')
 
     async def bootstrap(self, host, port, timeout, upstreams, proxy):
@@ -113,6 +114,18 @@ class Server:
             resolve_upstream_hostname(hostname_upstream, bootstrap_upstreams) \
                 for hostname_upstream in hostname_upstreams
         ])
+
+    async def test_upstreams(self):
+        pass
+
+    def create_task(self, coro):
+        task = self.loop.create_task(coro)
+        self.schedule.append(task)
+        task.add_done_callback(lambda _: self.remove_task(task))
+        return task
+
+    def remove_task(self, task):
+        self.schedule.remove(task)
 
     def _get_proxy(self, upstream):
         return self.proxy if upstream.proxy is None \
