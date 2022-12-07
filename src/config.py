@@ -71,6 +71,7 @@ DEFAULT_CONFIG = {
     'http': {
         'host': '127.0.0.1',
         'port': 8964,
+        'timeout': 2,
     },
 }
 
