@@ -116,18 +116,25 @@ class Server:
         self.server = None
         logger.debug('HTTP serivce initialized')
 
-    async def on_request(self, reader, writer):
+    async def on_request(self, request):
+        response_body = request.url.encode()
+        response_headers = HTTPMessage(email.policy.HTTP)
+        response_headers.add_header('Content-Type', 'text/plain')
+        response = Response('HTTP/1.1 200 OK', response_headers, response_body)
+        return response
+
+    async def on_connect(self, reader, writer):
         while not writer.transport.is_closing():
             try:
-                request = await Request.read_from(reader)
-                response_body = request.url.encode()
-                response_headers = HTTPMessage(email.policy.HTTP)
-                response_headers.add_header('Content-Type', 'text/plain')
-                response = Response('HTTP/1.1 200 OK', response_headers, response_body)
+                request = asyncio.wait_for(Request.read_from(reader), self.timeout)
+                response = await self.on_request(request)
                 await response.sendto(writer)
             except HttpException as exc:
                 response = Response('HTTP/1.1 400 Bad Request')
                 await response.sendto(writer)
+                writer.transport.close()
+                break
+            except TimeoutError:
                 writer.transport.close()
                 break
 
@@ -137,7 +144,8 @@ class Server:
         port = http_config['port']
         if host != '127.0.0.1' and host != 'localhost':
             logger.warn('HTTP server host %s is not safe', host)
-        self.server = await asyncio.start_server(self.on_request, host, port)
+        self.timeout = http_config['timeout']
+        self.server = await asyncio.start_server(self.on_connect, host, port)
         logger.info('HTTP serivce started')
 
         try:
