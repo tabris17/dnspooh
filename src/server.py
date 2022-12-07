@@ -23,17 +23,21 @@ class ServerProtocol(asyncio.DatagramProtocol):
     def __init__(self, server):
         super().__init__()
         self.server = server
+        self.need_restart = False
 
     def datagram_received(self, data, addr):
         self.server.on_request(data, addr)
 
     def error_received(self, exc):
-        logger.error('Server error: %s', exc)
+        logger.error('DNS server error: %s', exc)
+        self.need_restart = True
         self.server.transport.close()
 
     def connection_lost(self, exc):
         super().connection_lost(exc)
-        self.server.try_restart()
+        if self.need_restart:
+            self.need_restart = False
+            self.server.on_error_restart()
 
 
 class QueryProtocol(asyncio.DatagramProtocol):
@@ -63,17 +67,17 @@ class Server:
         stop_pedding = enum.auto()
         stopped = enum.auto()
 
-    def __init__(self, config):
+    def __init__(self, config, loop=None):
         self.config = config
         self.pool = Pool()
-        self.loop = asyncio.get_running_loop()
+        self.loop = asyncio.get_running_loop() if loop is None else loop
         self.abort_event = asyncio.Event()
         self.middleware = self._create_middlewares()
         self.transport = None
         self.stats = Stats(config['stats.max_size'])
         self.status = self.Status.initialized
         self.schedule = []
-        logger.debug('Serivce initialized')
+        logger.debug('DNS serivce initialized')
 
     async def bootstrap(self, host, port, timeout, upstreams, proxy):
         self.host = host
@@ -259,7 +263,7 @@ class Server:
 
     def abort(self):
         self.status = self.Status.stop_pedding
-        logger.info('Serivce aborted')
+        logger.info('DNS serivce aborted')
         return self.abort_event.set()
 
     async def restart(self):
@@ -270,9 +274,9 @@ class Server:
             local_addr=(self.host, self.port)
         )
         self.status = self.Status.running
-        logger.info('Service restarted')
+        logger.info('DNS service restarted')
 
-    def try_restart(self):
+    def on_error_restart(self):
         if self.status != self.Status.running:
             return
         return self.loop.create_task(self.restart())
@@ -292,17 +296,17 @@ class Server:
                 local_addr=(self.host, self.port)
             )
         except OSError as exc:
-            logger.error('Failed to start service: %s', exc)
+            logger.error('Failed to start DNS service: %s', exc)
             return
 
         self.status = self.Status.running
-        logger.info('Serivce started')
+        logger.info('DNS serivce started')
 
         try:
             await self.abort_event.wait()
         except asyncio.CancelledError:
-            logger.debug('Serivce interrupted')
+            logger.debug('DNS serivce interrupted')
         finally:
             self.transport.close()
             self.status = self.Status.stopped
-            logger.info('Serivce stopped')
+            logger.info('DNS serivce stopped')

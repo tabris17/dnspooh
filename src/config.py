@@ -8,6 +8,7 @@ except ImportError:
 
 from upstream import *
 from proxy import *
+from exceptions import InvalidConfig
 
 
 VERSION = '0.1.0'
@@ -67,6 +68,10 @@ DEFAULT_CONFIG = {
         'max_size': CACHE_MAX_SIZE,
         'ttl': CACHE_TTL,
     },
+    'http': {
+        'host': '127.0.0.1',
+        'port': 8964,
+    },
 }
 
 
@@ -119,9 +124,6 @@ def merge_dict_recursive(original, addition):
                 original[k] = _unique(orig_v + v)
 
     return original
-
-
-class InvalidConfig(Exception): pass
 
 
 class Config:

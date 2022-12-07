@@ -1,4 +1,4 @@
-proxy: socks5://127.0.0.1:7890
+#proxy: socks5://127.0.0.1:7890
 timeout: 5
 
 stats:
@@ -6,8 +6,6 @@ stats:
 
 middlewares:
   - cache
-
-
 
 upstreams:
   - name: 114dns

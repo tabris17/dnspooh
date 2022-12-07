@@ -3,8 +3,10 @@ import asyncio
 import logging
 import sys
 
+import https
+import server
+
 from config import *
-from server import Server
 from upstream import *
 
 
@@ -33,14 +35,6 @@ def parse_arguments():
     return parser.parse_args(sys.argv[1:])
 
 
-def init_logging(level):
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s [%(name)s.%(levelname)s] %(message)s",
-        handlers=[logging.StreamHandler()]
-    )
-
-
 async def main():
     args = parse_arguments()
     config = Config.load(args)
@@ -50,11 +44,22 @@ async def main():
         return
 
     debug = config['debug']
-    init_logging(level=logging.DEBUG if debug else logging.INFO)
-    #asyncio.get_running_loop().set_debug(debug)
+    logging.basicConfig(
+        level=logging.DEBUG if debug else logging.INFO,
+        format="%(asctime)s [%(name)s.%(levelname)s] %(message)s",
+        handlers=[logging.StreamHandler()]
+    )
+    logger = logging.getLogger(main.__name__)
 
-    server = Server(config)
-    await server.run()
+    loop = asyncio.get_running_loop()
+    loop.set_debug(debug)
+
+    dns_server = server.Server(config, loop)
+    http_server = https.Server(config, loop)
+    try:
+        await asyncio.gather(dns_server.run(), http_server.run())
+    except asyncio.CancelledError:
+        logger.info('exit.')
 
 
 if __name__ == '__main__':
