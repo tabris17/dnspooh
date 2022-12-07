@@ -18,12 +18,11 @@ logger = logging.getLogger(__name__)
 class HttpProtocol:
     def __init__(self, start_line, headers=None, body=None):
         try:
-            self.start_line = start_line
+            self.start_line = self.parse_start_line(start_line)
             self.headers = HTTPMessage(email.policy.HTTP) if headers is None else headers
             self.body = body
             if body and not headers.get('Content-Length'):
                 headers.add_header('Content-Length', str(len(body)))
-            self.parse_start_line(start_line)
         except Exception as exc:
             raise HttpException(exc)
 
@@ -74,10 +73,16 @@ class HttpProtocol:
 
 class Request(HttpProtocol):
     def parse_start_line(self, start_line):
-        method, url, version = start_line.split(' ', 2)
+        if isinstance(start_line, tuple):
+            triple = start_line[:3]
+            start_line = ' '.join(triple)
+        else:
+            triple = start_line.split(' ', 2)
+        method, url, version = triple
         self.method = HTTPMethod(method)
         self.url = url
         self.version = version
+        return start_line
 
 
 class Response(HttpProtocol):
@@ -86,6 +91,7 @@ class Response(HttpProtocol):
         self.status = HTTPStatus(int(status_code))
         self.status_text = status_text
         self.version = version
+        return start_line
 
 
 class Client:
@@ -134,7 +140,7 @@ class Server:
                 await response.sendto(writer)
                 writer.transport.close()
                 break
-            except TimeoutError:
+            except TimeoutError, EOFError, asyncio.LimitOverrunError:
                 writer.transport.close()
                 break
 
