@@ -17,6 +17,12 @@ LISTEN_HOST = '0.0.0.0'
 
 UPSTREAM_TIMEOUT = 1
 
+HTTP_TIMEOUT = 10
+
+HTTP_HOST = '127.0.0.1'
+
+HTTP_PORT = 8964
+
 CACHE_MAX_SIZE = 4096
 
 CACHE_TTL = 3600
@@ -69,9 +75,9 @@ DEFAULT_CONFIG = {
         'ttl': CACHE_TTL,
     },
     'http': {
-        'host': '127.0.0.1',
-        'port': 8964,
-        'timeout': 2,
+        'host': HTTP_HOST,
+        'port': HTTP_PORT,
+        'timeout': HTTP_TIMEOUT,
     },
 }
 
