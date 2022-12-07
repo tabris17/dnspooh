@@ -143,6 +143,11 @@ class Server:
             except TimeoutError, EOFError, asyncio.LimitOverrunError:
                 writer.transport.close()
                 break
+            except Exception as exc:
+                response = Response('HTTP/1.1 500 Internal Server Error')
+                await response.sendto(writer)
+                writer.transport.close()
+                break
 
     async def run(self):
         http_config = self.config['http']
