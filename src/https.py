@@ -17,18 +17,11 @@ HTTP_VERSION = 'HTTP/1.1'
 logger = logging.getLogger(__name__)
 
 
-class Request:
-    class FormData:
-        @classmethod
-        def parse(cls, content_type, data):
-            form = cls()
-            if content_type == 'applicaton/x-www-urlencoded':
-                #self._form = parse_qs(self.body.decode())
-                pass
-            elif content_type == 'multipart/form-data':
-                pass
-            return form
+class FormData:
+    pass
 
+
+class Request:
     def get(self, name, default=None):
         if self.query and name in self.query:
             return self.query[name].pop()
@@ -39,17 +32,31 @@ class Request:
             return self.query[name]
         return []
 
-    def _parse_form(self):
-        if hasattr(self, '_form'): return
-        content_type = self.headers.get('Conetent-Type')
-        self._form = self.FormData.parse(content_type, self.body)
+    @property
+    def body(self):
+        return self._body
+
+    @body.setter
+    def body(self, value):
+        if isinstance(value, bytes):
+            content_type = self.headers.get('Conetent-Type')
+            if content_type == 'applicaton/x-www-urlencoded':
+                self.form = parse_qs(self.body.decode())
+            elif content_type == 'multipart/form-data':
+                pass
+            else:
+                self.form = dict()
+        elif isinstance(value, FormData):
+            pass
+        else:
+            raise TypeError('Response body must be bytes type, %s given' % (type(value), ))
 
     def __init__(self):
         self.method = None
         self._url = None
         self.version = HTTP_VERSION
         self.headers = HTTPMessage(email.policy.HTTP)
-        self.body = None
+        self._body = None
         self.query_string = None
         self.path = None
         self.query = None
