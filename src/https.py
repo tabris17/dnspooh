@@ -29,14 +29,6 @@ class Request:
                 pass
             return form
 
-    async def read(self, reader):
-        try:
-            start_line, self.headers, self.body = await _read_http_message(reader)
-            method, self.url, self.version = start_line.split(' ', 2)
-            self.method = HTTPMethod(method)
-        except Exception as exc:
-            raise HttpRequestException(exc)
-
     def _parse_query(self):
         if hasattr(self, '_query'): return
         parsed_url = urlsplit(self.url)
@@ -130,7 +122,7 @@ class Client:
             resp.version, status, resp.reason = start_line.split(' ', 2)
             resp.status = HTTPStatus(int(status))
         except:
-            raise HttpResponseException()
+            raise HttpResponseException('Invalid response'))
         return resp
 
     async def get(self, path, query=None, headers=[]):
@@ -157,6 +149,16 @@ class Server:
 
     async def _respond(self, writer, response):
         pass
+        
+    def _read_request(self, reader):
+        req = Request()
+        try:
+            start_line, req.headers, req.body = await _read_http_message(reader)
+            method, req.url, req.version = start_line.split(' ', 2)
+            self.method = HTTPMethod(method)
+        except Exception:
+            raise HttpRequestException('Invalid request')
+        return req
 
     def build_response(self, status, headers, body=None):
         resp = Response()
@@ -181,8 +183,7 @@ class Server:
     async def on_connect(self, reader, writer):
         while not writer.transport.is_closing():
             try:
-                request = Request()
-                await asyncio.wait_for(request.read(reader), self.timeout)
+                await asyncio.wait_for(self._read_request(reader), self.timeout)
                 await self._respond(writer, await self.on_request(request))
             except HttpRequestException:
                 await self._respond(writer, await self.on_error(400))
