@@ -156,21 +156,24 @@ class Server:
     async def _respond(self, writer, response):
         pass
 
-    def build_response(self, status, content_type, content):
+    def build_response(self, status, headers, body=None):
         resp = Response()
         resp.status = status
         resp.reason = status.name
+        resp.body = body
+        resp.headers.set('Content-Length', str(len(body)))
         return resp
 
     async def on_request(self, request):
-        response_body = request.url.encode()
-        response_headers = HTTPMessage(email.policy.HTTP)
-        response_headers.add_header('Content-Type', 'text/plain')
-        response = Response('HTTP/1.1 200 OK', response_headers, response_body)
-        return response
+        resp = self.build_response(HTTPStatus(status), [
+            ('Content-Type', 'text/plain'),
+        ], request.url.encode())
+        return resp
 
     async def on_error(self, status):
-        resp = Response()
+        resp = self.build_response(HTTPStatus(status), [
+            ('Connection', 'close'),
+        ])
         return resp
 
     async def on_connect(self, reader, writer):
