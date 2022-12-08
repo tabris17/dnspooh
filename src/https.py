@@ -82,14 +82,6 @@ class Request:
 
 
 class Response:
-    async def read(self, reader):
-        try:
-            start_line, self.headers, self.body = await _read_http_message(reader)
-            self.version, status, self.reason = start_line.split(' ', 2)
-            self.status = HTTPStatus(int(status))
-        except Exception as exc:
-            raise HttpResponseExcepion(exc)
-
     def __init__(self):
         self.status = None
         self.reason = None
@@ -131,6 +123,16 @@ class Client:
             writer.write(request.body)
         await writer.drain()
 
+    async def _read_response(self):
+        resp = Response()
+        try:
+            start_line, resp.headers, resp.body = await _read_http_message(reader)
+            resp.version, status, resp.reason = start_line.split(' ', 2)
+            resp.status = HTTPStatus(int(status))
+        except:
+            raise HttpResponseException()
+        return resp
+
     async def get(self, path, query=None, headers=[]):
         default_headers = [
             ('Host', self.hostname),
@@ -141,8 +143,7 @@ class Client:
         request = self.build_request(HTTPMethod.GET, path, query, headers + default_headers)
         logger.debug('HTTP request sent to "%s": %s', self.hostname, request)
         await self._request(request)
-        response = Response()
-        await response.read(self.conn.reader)
+        response = await self._read_response()
         logger.debug('HTTP response received from "%s": %s', self.hostname, response)
         return response
 
