@@ -191,9 +191,9 @@ class Server:
             self._get_proxy(upstream)
         ) as conn:
             q = base64.b64encode(query).decode().rstrip('=')
-            return (await https.Client(conn).get(
-                upstream.path + '?dns=' + q, 
-                upstream.hostname, 
+            return (await https.Client(upstream.hostname, conn).get(
+                upstream.path,
+                {'dns': q}, 
                 [("Content-type", "application/dns-message")]
             )).body
 

@@ -9,10 +9,10 @@ async def proxy():
     pool = Pool()
     proxy = parse_proxy('socks5://127.0.0.1:7890')
     conn = await pool.connect('112.80.248.75', 443, Scheme.tls, proxy)
-    https_client = https.Client(conn)
-    response = await https_client.get('/', 'www.baidu.com')
+    https_client = https.Client('www.baidu.com', conn)
+    response = await https_client.get('/')
     #print(response)
-    response = await https_client.get('/', 'www.baidu.com')
+    response = await https_client.get('/')
 
 async def datagram():
     class DatagramProtocol(asyncio.DatagramProtocol):

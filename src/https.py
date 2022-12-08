@@ -4,8 +4,10 @@ import logging
 import email.parser
 import email.policy
 
+from email.mime.multipart import MIMEMultipart
 from http import HTTPStatus, HTTPMethod
 from http.client import HTTPMessage
+from urllib.parse import urlencode, urlsplit, parse_qs
 
 from exceptions import HttpException
 
@@ -15,103 +17,134 @@ HTTP_VERSION = 'HTTP/1.1'
 logger = logging.getLogger(__name__)
 
 
-class HttpProtocol:
-    def __init__(self, start_line, headers=None, body=None):
-        try:
-            self.start_line = self.parse_start_line(start_line)
-            self.headers = HTTPMessage(email.policy.HTTP) if headers is None else headers
-            self.body = body
-            if body and not headers.get('Content-Length'):
-                headers.add_header('Content-Length', str(len(body)))
-        except Exception as exc:
-            raise HttpException(exc)
+class Request:
+    class FormData:
+        @classmethod
+        def parse(cls, content_type, data):
+            form = cls()
+            if content_type == 'applicaton/x-www-urlencoded':
+                #self._form = parse_qs(self.body.decode())
+                pass
+            elif content_type == 'multipart/form-data':
+                pass
+            else:
+                raise ValueError('Invalid content type "%s"' % (content_type, ))
+            return form
 
-    def parse_start_line(self, start_line):
-        raise NotImplementedError()
+    def parse(self, start_line, headers, body):
+        self.headers = headers
+        self.body = body
+        method, self.url, self.version = start_line.split(' ', 2)
+        self.method = HTTPMethod(method)
 
-    async def sendto(self, writer):
-        writer.write(self.as_bytes())
-        await writer.drain()
+    def _parse_query(self):
+        if hasattr(self, '_query'): return
+        parsed_url = urlsplit(self.url)
+        self._query = parse_qs(parsed_url.query) if parsed_url.query else dict()
 
-    def as_bytes(self):
-        try:
-            data = io.BytesIO()
-            data.write(self.start_line.encode())
-            data.write(b'\r\n')
-            data.write(self.headers.as_bytes()) 
-            if self.body: data.write(self.body)
-            return data.getvalue()
-        except Exception as exc:
-            raise HttpException(exc)
+    def get(self, name, default=None):
+        self._parse_query()
+        if name in self._query:
+            return self._query[name].pop()
+        return default
 
-    def __bytes__(self):
-        return self.as_bytes()
+    def get_all(self, name):
+        self._parse_query()
+        if name in self._query:
+            return self._query[name]
+        return []
+
+    def prepare(self):
+        self._parse_query()
+        self._parse_form()
+
+    def _parse_form(self):
+        if hasattr(self, '_form'): return
+        content_type = self.headers.get('Conetent-Type')
+        self._form = self.FormData.parse(content_type, self.body)
+
+    @property
+    def form(self):
+        return self._form
+
+    def __init__(self):
+        self.method = None
+        self.url = None
+        self.version = HTTP_VERSION
+        self.headers = HTTPMessage(email.policy.HTTP)
+        self.body = None
 
     def __repr__(self):
-        return self.as_bytes().decode()
-
-    @classmethod
-    async def read_from(cls, reader):
-        raw_headers = await reader.readuntil(b'\r\n\r\n')
-        fp = io.StringIO(raw_headers.decode())
-        start_line = fp.readline()
-        headers = email.parser.Parser(_class=HTTPMessage).parse(fp)
-        body = None
-        if headers.get('Transfer-Encoding') == 'chunked':
-            body = await reader.readuntil(b'\r\n\r\n')
-        else:
-            content_length = headers['Content-Length']
-            if content_length is not None:
-                try:
-                    content_length = int(content_length)
-                except TypeError:
-                    raise HttpException('Invalid content length "%s"' % (content_length, ))
-                body = await reader.readexactly(content_length)
-
-        return cls(start_line, headers, body)
+        if self.method is None or self.url is None:
+            return '<%s>' % self.__class__.__name__
+        return '<%s: %s %r>' % (
+            self.__class__.__name__,
+            self.method,
+            self.url,
+        )
 
 
-class Request(HttpProtocol):
-    def parse_start_line(self, start_line):
-        if isinstance(start_line, tuple):
-            triple = start_line[:3]
-            start_line = ' '.join(triple)
-        else:
-            triple = start_line.split(' ', 2)
-        method, url, version = triple
-        self.method = HTTPMethod(method)
-        self.url = url
-        self.version = version
-        return start_line
+class Response:
+    def parse(self, start_line, headers, body):
+        self.headers = headers
+        self.body = body
+        self.version, status, self.reason = start_line.split(' ', 2)
+        self.status = HTTPStatus(int(status))
 
+    def __init__(self):
+        self.status = None
+        self.reason = None
+        self.version = HTTP_VERSION
+        self.headers = HTTPMessage(email.policy.HTTP)
+        self.body = None
 
-class Response(HttpProtocol):
-    def parse_start_line(self, start_line):
-        version, status_code, status_text = start_line.split(' ', 2)
-        self.status = HTTPStatus(int(status_code))
-        self.status_text = status_text
-        self.version = version
-        return start_line
+    def __repr__(self):
+        return "<%(cls)s status=%(status)d type=%(type)s length=%(len)s>" % {
+            'cls': self.__class__.__name__,
+            'status': self.status,
+            'len': self.headers.get('Content-Length'),
+            'type': self.headers.get('Content-Type'),
+        }
 
 
 class Client:
-    def __init__(self, conn):
+    def __init__(self, hostname, conn):
+        self.hostname = hostname
         self.conn = conn
+    
+    def build_request(self, method, path, query, headers, body=None):
+        req = Request()
+        req.method = method
+        req.url = '%s?%s' % (path, urlencode(query)) if query else path
+        req.body = body
+        for hdr in headers:
+            req.headers.add_header(*hdr)
+        return req
 
-    async def get(self, url, hostname, headers=[]):
+    async def _request(self, request):
+        writer = self.conn.writer
+        start_line = '%s %s %s\r\n' % (request.method, request.url, request.version)
+        writer.write(start_line.encode())
+        writer.write(request.headers.as_bytes())
+        if request.body:
+            if not request.headers.get('Content-Length'):
+                request.headers.add_header('Content-Length', str(len(request.body)))
+            writer.write(request.body)
+        await writer.drain()
+
+    async def get(self, path, query=None, headers=[]):
         default_headers = [
-            ('Host', hostname),
+            ('Host', self.hostname),
             ('Accept-Encoding', 'identity'),
             ('Connection', 'keep-alive'),
         ]
-        parsed_headers = HTTPMessage(email.policy.HTTP)
-        for header in default_headers + headers:
-            parsed_headers.add_header(*header)
-        request = Request('%s %s %s' % (HTTPMethod.GET, url, HTTP_VERSION), parsed_headers)
-        logger.debug('HTTP request:\n%s', request)
-        await request.sendto(self.conn.writer)
-        response = await Response.read_from(self.conn.reader)
-        logger.debug('HTTP response:\n%s', response)
+        
+        request = self.build_request(HTTPMethod.GET, path, query, headers + default_headers)
+        logger.debug('HTTP request sent to "%s": %s', self.hostname, request)
+        await self._request(request)
+        response = Response()
+        response.parse(*(await read_http_message(self.conn.reader)))
+        logger.debug('HTTP response received from "%s": %s', self.hostname, response)
         return response
 
 
@@ -121,6 +154,12 @@ class Server:
         self.config = config
         self.server = None
         logger.debug('HTTP serivce initialized')
+
+    def build_response(self, status, content_type, content):
+        resp = Response()
+        resp.status = status
+        resp.reason = status.name
+        return resp
 
     async def on_request(self, request):
         response_body = request.url.encode()
@@ -132,7 +171,7 @@ class Server:
     async def on_connect(self, reader, writer):
         while not writer.transport.is_closing():
             try:
-                request = asyncio.wait_for(Request.read_from(reader), self.timeout)
+                request = await asyncio.wait_for(Request.read_from(reader), self.timeout)
                 response = await self.on_request(request)
                 await response.sendto(writer)
             except HttpException as exc:
@@ -140,14 +179,13 @@ class Server:
                 await response.sendto(writer)
                 writer.transport.close()
                 break
-            except TimeoutError, EOFError, asyncio.LimitOverrunError:
+            except (TimeoutError, EOFError, asyncio.LimitOverrunError):
                 writer.transport.close()
                 break
             except Exception as exc:
                 response = Response('HTTP/1.1 500 Internal Server Error')
                 await response.sendto(writer)
                 writer.transport.close()
-                break
 
     async def run(self):
         http_config = self.config['http']
@@ -168,3 +206,23 @@ class Server:
             self.server.close()
             #self.status = self.Status.stopped
             logger.info('HTTP serivce stopped')
+
+
+async def read_http_message(reader):
+    http_header = await reader.readuntil(b'\r\n\r\n')
+    fp = io.StringIO(http_header.decode())
+    start_line = fp.readline()
+    headers = email.parser.Parser(_class=HTTPMessage).parse(fp)
+    body = None
+    if headers.get('Transfer-Encoding') == 'chunked':
+        body = await reader.readuntil(b'\r\n\r\n')
+    else:
+        content_length = headers['Content-Length']
+        if content_length is not None:
+            try:
+                content_length = int(content_length)
+            except TypeError:
+                raise HttpException('Invalid content length "%s"' % (content_length, ))
+            body = await reader.readexactly(content_length)
+    return start_line, headers, body
+
