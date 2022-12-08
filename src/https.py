@@ -29,21 +29,14 @@ class Request:
                 pass
             return form
 
-    def _parse_query(self):
-        if hasattr(self, '_query'): return
-        parsed_url = urlsplit(self.url)
-        self._query = parse_qs(parsed_url.query) if parsed_url.query else dict()
-
     def get(self, name, default=None):
-        self._parse_query()
-        if name in self._query:
-            return self._query[name].pop()
+        if self.query and name in self.query:
+            return self.query[name].pop()
         return default
 
     def get_all(self, name):
-        self._parse_query()
-        if name in self._query:
-            return self._query[name]
+        if self.query and name in self.query:
+            return self.query[name]
         return []
 
     def _parse_form(self):
@@ -51,17 +44,32 @@ class Request:
         content_type = self.headers.get('Conetent-Type')
         self._form = self.FormData.parse(content_type, self.body)
 
-    @property
-    def form(self):
-        return self._form
-
     def __init__(self):
         self.method = None
-        self.url = None
+        self._url = None
         self.version = HTTP_VERSION
         self.headers = HTTPMessage(email.policy.HTTP)
         self.body = None
         self.query_string = None
+        self.path = None
+        self.query = None
+        self.form = None
+
+    @property
+    def url(self):
+        return self._url
+
+    @url.setter
+    def url(self, value):
+        parsed_url = urlsplit(value)
+        self._url = value
+        self.path = parsed_url.path
+        if parsed_url.query:
+            self.query_string = parsed_url.query
+            self.query = parse_qs(parsed_url.query)
+        else:
+            self.query_string = ''
+            self.query = dict
 
     def __repr__(self):
         if self.method is None or self.url is None:
