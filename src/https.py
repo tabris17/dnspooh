@@ -9,7 +9,7 @@ from http import HTTPStatus, HTTPMethod
 from http.client import HTTPMessage
 from urllib.parse import urlencode, urlsplit, parse_qs
 
-from exceptions import HttpException
+from exceptions import HttpRequestException, HttpResponseException
 
 
 HTTP_VERSION = 'HTTP/1.1'
@@ -27,15 +27,15 @@ class Request:
                 pass
             elif content_type == 'multipart/form-data':
                 pass
-            else:
-                raise ValueError('Invalid content type "%s"' % (content_type, ))
             return form
 
-    def parse(self, start_line, headers, body):
-        self.headers = headers
-        self.body = body
-        method, self.url, self.version = start_line.split(' ', 2)
-        self.method = HTTPMethod(method)
+    async def read(self, reader):
+        try:
+            start_line, self.headers, self.body = await _read_http_message(reader)
+            method, self.url, self.version = start_line.split(' ', 2)
+            self.method = HTTPMethod(method)
+        except Exception as exc:
+            raise HttpRequestException(exc)
 
     def _parse_query(self):
         if hasattr(self, '_query'): return
@@ -53,10 +53,6 @@ class Request:
         if name in self._query:
             return self._query[name]
         return []
-
-    def prepare(self):
-        self._parse_query()
-        self._parse_form()
 
     def _parse_form(self):
         if hasattr(self, '_form'): return
@@ -85,11 +81,13 @@ class Request:
 
 
 class Response:
-    def parse(self, start_line, headers, body):
-        self.headers = headers
-        self.body = body
-        self.version, status, self.reason = start_line.split(' ', 2)
-        self.status = HTTPStatus(int(status))
+    async def read(self, reader):
+        try:
+            start_line, self.headers, self.body = await _read_http_message(reader)
+            self.version, status, self.reason = start_line.split(' ', 2)
+            self.status = HTTPStatus(int(status))
+        except Exception as exc:
+            raise HttpResponseExcepion(exc)
 
     def __init__(self):
         self.status = None
@@ -143,7 +141,7 @@ class Client:
         logger.debug('HTTP request sent to "%s": %s', self.hostname, request)
         await self._request(request)
         response = Response()
-        response.parse(*(await read_http_message(self.conn.reader)))
+        await response.read(self.conn.reader)
         logger.debug('HTTP response received from "%s": %s', self.hostname, response)
         return response
 
@@ -154,6 +152,9 @@ class Server:
         self.config = config
         self.server = None
         logger.debug('HTTP serivce initialized')
+
+    async def _respond(self, writer, response):
+        pass
 
     def build_response(self, status, content_type, content):
         resp = Response()
@@ -168,24 +169,27 @@ class Server:
         response = Response('HTTP/1.1 200 OK', response_headers, response_body)
         return response
 
+    async def on_error(self, status):
+        resp = Response()
+        return resp
+
     async def on_connect(self, reader, writer):
         while not writer.transport.is_closing():
             try:
-                request = await asyncio.wait_for(Request.read_from(reader), self.timeout)
-                response = await self.on_request(request)
-                await response.sendto(writer)
-            except HttpException as exc:
-                response = Response('HTTP/1.1 400 Bad Request')
-                await response.sendto(writer)
+                request = Request()
+                await asyncio.wait_for(request.read(reader), self.timeout)
+                await self._respond(writer, await self.on_request(request))
+            except HttpRequestException:
+                await self._respond(writer, await self.on_error(400))
                 writer.transport.close()
                 break
             except (TimeoutError, EOFError, asyncio.LimitOverrunError):
                 writer.transport.close()
                 break
-            except Exception as exc:
-                response = Response('HTTP/1.1 500 Internal Server Error')
-                await response.sendto(writer)
+            except Exception:
+                await self._respond(writer, await self.on_error(500))
                 writer.transport.close()
+                break
 
     async def run(self):
         http_config = self.config['http']
@@ -208,7 +212,7 @@ class Server:
             logger.info('HTTP serivce stopped')
 
 
-async def read_http_message(reader):
+async def _read_http_message(reader):
     http_header = await reader.readuntil(b'\r\n\r\n')
     fp = io.StringIO(http_header.decode())
     start_line = fp.readline()
@@ -219,10 +223,6 @@ async def read_http_message(reader):
     else:
         content_length = headers['Content-Length']
         if content_length is not None:
-            try:
-                content_length = int(content_length)
-            except TypeError:
-                raise HttpException('Invalid content length "%s"' % (content_length, ))
-            body = await reader.readexactly(content_length)
+            body = await reader.readexactly(int(content_length))
     return start_line, headers, body
 
