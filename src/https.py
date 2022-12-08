@@ -69,6 +69,7 @@ class Request:
         self.version = HTTP_VERSION
         self.headers = HTTPMessage(email.policy.HTTP)
         self.body = None
+        self.query_string = None
 
     def __repr__(self):
         if self.method is None or self.url is None:
