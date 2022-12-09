@@ -38,10 +38,20 @@ async def datagram():
         local_addr=local_addr
     )
 
+async def form_data():
+    pool = Pool()
+    conn = await pool.connect('192.168.10.10', 80, Scheme.tcp)
+    https_client = https.Client('192.168.10.10', conn)
+    #response = await https_client.get('/')
+    form_data = https.FormData()
+    form_data.append('name', 'value')
+    print(form_data.as_bytes())
+    response = await https_client.get('/index.php')
+
 if __name__ == '__main__':
     logging.basicConfig(
         level=logging.DEBUG,
         format="%(asctime)s [%(levelname)s] %(message)s",
         handlers=[logging.StreamHandler()]
     )
-    asyncio.run(proxy())
+    asyncio.run(form_data())
