@@ -48,6 +48,13 @@ class Stats:
         def __repr__(self):
             return str(vars(self))
 
+        def as_dict(self):
+            return {
+                'upstream': self.upstream.name,
+                'start_time': self.start_time,
+                'cost_time': self.cost_time,
+            }
+
     def __init__(self, maxlen):
         self.records = deque(maxlen=maxlen)
 

@@ -35,7 +35,7 @@ def parse_arguments():
     return parser.parse_args(sys.argv[1:])
 
 
-async def main():
+async def _main():
     args = parse_arguments()
     config = Config.load(args)
     if args.dump:
@@ -55,12 +55,16 @@ async def main():
     loop.set_debug(debug)
 
     dns_server = server.Server(config, loop)
-    http_server = https.Server(config, loop)
+    dispatcher = https.Dispatcher(dns_server)
+    http_server = https.Server(config, dispatcher, loop)
     try:
         await asyncio.gather(dns_server.run(), http_server.run())
     except asyncio.CancelledError:
         logger.info('exit.')
 
 
+def main(): asyncio.run(_main())
+
+
 if __name__ == '__main__':
-    asyncio.run(main())
+    main()

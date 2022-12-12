@@ -40,13 +40,11 @@ async def datagram():
 
 async def form_data():
     pool = Pool()
-    conn = await pool.connect('192.168.10.10', 80, Scheme.tcp)
-    https_client = https.Client('192.168.10.10', conn)
-    #response = await https_client.get('/')
+    conn = await pool.connect('localhost', 8008, Scheme.tcp)
+    https_client = https.Client('localhost:8008', conn)
     form_data = https.FormData()
-    form_data.append('name', 'value')
-    print(form_data.as_bytes())
-    response = await https_client.get('/index.php')
+    form_data.append('name123', 'value123213')
+    response = await https_client.post('/index.php?asd=123', body=form_data)
 
 if __name__ == '__main__':
     logging.basicConfig(

@@ -1,20 +1,21 @@
 import asyncio
 import base64
 import io
+import json
 import logging
 import email
 import email.policy
 import mimetypes
 import html
+import pathlib
 import random
 
 from collections import namedtuple
-from email.mime.multipart import MIMEMultipart
 from http import HTTPStatus, HTTPMethod
 from http.client import HTTPMessage
 from urllib.parse import urlencode, urlsplit, parse_qs
 
-from exceptions import HttpRequestException, HttpResponseException
+from exceptions import HttpException, HttpHeaderTooLarge, HttpPayloadTooLarge, HttpNotFound, InvalidConfig
 
 
 HTTP_VERSION = 'HTTP/1.1'
@@ -26,6 +27,19 @@ ContentType = namedtuple('ContentType', ['media_type', 'charset', 'boundary', 'n
 ContentDisposition = namedtuple('ContentDisposition', ['type', 'name', 'filename'])
 
 UploadedFile = namedtuple('UploadedFile', ['filename', 'name', 'content_type', 'content'])
+
+
+class HttpMessage(HTTPMessage):
+    def get_content_maintype(self):
+        maintype = super().get_content_maintype()
+        if maintype == 'multipart':
+            return ''
+        return maintype
+
+    def set_header(self, name, value, **params):
+        if self.get(name):
+            del self[name]
+        return self.add_header(name, str(value), **params)
 
 
 class FormData:
@@ -90,7 +104,7 @@ class Request:
             fp.write(b'\r\n\r\n')
             fp.write(body)
             form_data = email.message_from_binary_file(
-                fp, _class=HTTPMessage, policy=email.policy.HTTP).get_payload()
+                fp, _class=HttpMessage, policy=email.policy.HTTP).get_payload()
         if not form_data: return
         form = dict()
         files = dict()
@@ -133,7 +147,7 @@ class Request:
         self.method = None
         self._url = None
         self.version = HTTP_VERSION
-        self.headers = HTTPMessage(email.policy.HTTP)
+        self.headers = HttpMessage(email.policy.HTTP)
         self._body = None
         self.query_string = None
         self.path = None
@@ -168,18 +182,62 @@ class Request:
 
 
 class Response:
-    def __init__(self):
-        self.status = None
-        self.reason = None
+    def __init__(self, status=200):
+        self._status = HTTPStatus(status)
+        self.reason = self._status.name
         self.version = HTTP_VERSION
-        self.headers = HTTPMessage(email.policy.HTTP)
+        self.headers = HttpMessage(email.policy.HTTP)
         self.body = None
+
+    @property
+    def status(self):
+        return self._status
+
+    @status.setter
+    def status(self, value):
+        if not isinstance(value, HTTPStatus):
+            value = HTTPStatus(value)
+        self._status = value
+        self.reason = value.name
 
     def __repr__(self):
         return "<%(cls)s status=%(status)d type=%(type)s length=%(len)s>" % {
             'cls': self.__class__.__name__,
             'status': self.status,
-            'len': self.headers.get('Content-Length'),
+            'len': len(self.body),
+            'type': self.headers.get('Content-Type'),
+        }
+
+
+class FileResponse(Response):
+    def __init__(self, file):
+        super().__init__()
+        self.file = file
+
+    @property
+    def size(self):
+        return self.file.stat().st_size
+
+    def __repr__(self):
+        return "<%(cls)s status=%(status)d type=%(type)s length=%(len)s>" % {
+            'cls': self.__class__.__name__,
+            'status': self.status,
+            'len': self.size,
+            'type': self.headers.get('Content-Type'),
+        }
+
+
+class JsonResponse(Response):
+    def __init__(self, payload):
+        super().__init__(200)
+        self.body = json.dumps(payload).encode()
+        self.headers.add_header('Content-Type', 'application/json', charset='utf-8')
+
+    def __repr__(self):
+        return "<%(cls)s status=%(status)d type=%(type)s length=%(len)s>" % {
+            'cls': self.__class__.__name__,
+            'status': self.status,
+            'len': len(self.body),
             'type': self.headers.get('Content-Type'),
         }
 
@@ -203,19 +261,10 @@ class Client:
         for hdr in headers:
             req.headers.add_header(*hdr)
         if isinstance(body, dict):
-            content_type = ('Content-Type', 'applicaton/x-www-urlencoded')
-            if req.headers.get('Content-Type'):
-                req.headers.replace_header(*content_type)
-            else:
-                req.headers.add_header(*content_type)
+            req.headers.set_header('Content-Type', 'application/x-www-form-urlencoded')
             body = urlencode(body).encode()
         elif isinstance(body, FormData):
-            content_type = ('Content-Type', 'multipart/form-data')
-            boundary = body.get_boundary()
-            if req.headers.get('Content-Type'):
-                req.headers.replace_header(*content_type, boundary=boundary)
-            else:
-                req.headers.add_header(*content_type, boundary=boundary)
+            req.headers.set_header('Content-Type', 'multipart/form-data', boundary=body.get_boundary())
             body = body.as_bytes()
         req.body = body
         return req
@@ -225,10 +274,7 @@ class Client:
         start_line = '%s %s %s\r\n' % (request.method, request.url, request.version)
         writer.write(start_line.encode())
         if request.body:
-            if request.headers.get('Content-Length'):
-                request.headers.replace_header('Content-Length', str(len(request.body)))
-            else:
-                request.headers.add_header('Content-Length', str(len(request.body)))
+            request.headers.set_header('Content-Length', len(request.body))
             writer.write(request.headers.as_bytes())
             writer.write(request.body)
         else:
@@ -238,7 +284,7 @@ class Client:
         try:
             await writer.drain()
         except Exception as exc:
-            raise HttpRequestException(str(exc))
+            raise HttpException(str(exc))
 
     async def _read_response(self):
         resp = Response()
@@ -246,8 +292,10 @@ class Client:
             start_line, resp.headers, resp.body = await _read_http_message(self.conn.reader)
             resp.version, status, resp.reason = start_line.split(' ', 2)
             resp.status = HTTPStatus(int(status))
+        except (HttpException, asyncio.CancelledError) as exc:
+            raise exc
         except:
-            raise HttpResponseException('Invalid response')
+            raise HttpException('Invalid response')
         return resp
 
     async def get(self, path, query=None, headers=[]):
@@ -268,57 +316,82 @@ class Client:
 
 
 class Server:
-    def __init__(self, config, loop=None):
+    MAX_REQUEST_SIZE = 1024 * 1024 * 16
+
+    DEFAULT_FILES = ['index.html', 'index.htm', 'default.htm', 'default.html']
+
+    def __init__(self, config, dispatcher, loop=None):
         self.loop = asyncio.get_running_loop() if loop is None else loop
         self.config = config
-        self.server = None
+        self.dispatcher = dispatcher
+        self._server = None
         logger.debug('HTTP serivce initialized')
 
     async def _respond(self, writer, response):
-        start_line = '%s %s %s\r\n' % (response.version, response.status, response.status.name)
-        writer.write(start_line.encode())
-        if response.body:
-            if response.headers.get('Content-Length'):
-                response.headers.replace_header('Content-Length', str(len(response.body)))
+        try:
+            response.headers.add_header('Server', 'DNSPooh')
+            start_line = '%s %s %s\r\n' % (response.version, response.status, response.status.name)
+            writer.write(start_line.encode())
+            if isinstance(response, FileResponse):
+                ctype, charset = mimetypes.guess_type(response.file)
+                kwargs = {} if charset is None else {'charset': charset}
+                response.headers.set_header(
+                    'Content-Type', 
+                    'application/octet-stream' if ctype is None else ctype,
+                    **kwargs
+                )
+                with response.file.open('rb') as fp:
+                    response.headers.set_header('Content-Length', response.size)
+                    writer.write(response.headers.as_bytes())
+                    await writer.drain()
+                    await self.loop.sendfile(writer.transport, fp)
+                return response
+            elif response.body:
+                response.headers.set_header('Content-Length', len(response.body))
+                writer.write(response.headers.as_bytes())
+                writer.write(response.body)
             else:
-                response.headers.add_header('Content-Length', str(len(response.body)))
-            writer.write(response.headers.as_bytes())
-            writer.write(response.body)
-        else:
-            del response.headers['Content-Length']
-            writer.write(response.headers.as_bytes())
-        await writer.drain()
+                del response.headers['Content-Length']
+                writer.write(response.headers.as_bytes())
+            await writer.drain()
+        except:
+            raise IOError('Response begin sending and an error occurred')
         return response
         
     async def _read_request(self, reader):
         req = Request()
         try:
-            start_line, req.headers, req.body = await _read_http_message(reader)
+            start_line, req.headers, req.body = await _read_http_message(reader, self.MAX_REQUEST_SIZE)
             method, req.url, req.version = start_line.split(' ', 2)
             req.method = HTTPMethod(method)
-        except Exception:
-            raise HttpRequestException('Invalid request')
+        except HttpException as exc:
+            raise exc
+        except:
+            raise HttpException('Invalid request')
         return req
 
-    def build_response(self, status, headers, body=None):
-        resp = Response()
-        resp.status = status
-        resp.reason = status.name
-        resp.body = body
-        for hdr in headers:
-            resp.headers.add_header(*hdr)
-        return resp
+    def _resolve_static_file(self, path):
+        file_path = self.static_files.joinpath('.' + path)
+
+        if file_path.is_dir():
+            for default_file in self.DEFAULT_FILES:
+                file_path = file_path.joinpath(default_file)
+                if file_path.exists():
+                    return file_path
+        elif file_path.exists():
+            return file_path
+
+        return False
 
     async def on_request(self, request):
-        resp = self.build_response(HTTPStatus(200), [
-            ('Content-Type', 'text/plain'),
-        ], request.url.encode())
-        return resp
+        static_file = self._resolve_static_file(request.path)
+        if static_file:
+            return FileResponse(static_file)
+        return self.dispatcher.dispatch(request)
 
     async def on_error(self, status):
-        resp = self.build_response(HTTPStatus(status), [
-            ('Connection', 'close'),
-        ])
+        resp = Response(status)
+        resp.headers.add_header('Connection', 'close')
         return resp
 
     async def on_connect(self, reader, writer):
@@ -330,11 +403,11 @@ class Server:
                 logger.debug('Request received from "%s:%d": %s', *peername, request)
                 response = await self._respond(writer, await self.on_request(request))
                 logger.debug('Response sent to "%s:%d": %s', *peername, response)
-            except HttpRequestException:
+            except HttpException:
                 await self._respond(writer, await self.on_error(400))
                 writer.transport.close()
                 break
-            except (TimeoutError, EOFError, asyncio.LimitOverrunError):
+            except (TimeoutError, EOFError, IOError):
                 writer.transport.close()
                 break
             except Exception as exc:
@@ -345,54 +418,59 @@ class Server:
 
     async def run(self):
         http_config = self.config['http']
+        static_files = pathlib.Path(http_config['static_files'])
+        if not static_files.is_dir():
+            raise InvalidConfig('%s is not a directory' % (static_files, ))
+        self.static_files = static_files
         host = http_config['host']
         port = int(http_config['port'])
         if host != '127.0.0.1' and host != 'localhost':
             logger.warn('HTTP server host %s is not safe', host)
         self.timeout = http_config['timeout']
-        self.server = await asyncio.start_server(self.on_connect, host, port)
+        self._server = await asyncio.start_server(self.on_connect, host, port)
         logger.info('HTTP serivce started')
         logger.info('HTTP server is available at http://%s:%d/', host, port)
 
         try:
-            async with self.server:
-                await self.server.serve_forever()
+            async with self._server:
+                await self._server.serve_forever()
         except asyncio.CancelledError:
             logger.debug('HTTP serivce interrupted')
         finally:
-            self.server.close()
+            self._server.close()
             #self.status = self.Status.stopped
             logger.info('HTTP serivce stopped')
 
 
-async def _readuntil(reader, sep):
-    return await reader.readuntil(sep)
-
-
-async def _readexactly(reader, size):
-    size = int(size)
-    return await reader.readexactly(size)
-
-
-async def _readall(reader):
-    return await reader.read()
-
-
-async def _read_http_message(reader):
-    http_header = await _readuntil(reader, b'\r\n\r\n')
+async def _read_http_message(reader, max_body=None):
+    try:
+        http_header = await reader.readuntil(b'\r\n\r\n')
+    except asyncio.exceptions.LimitOverrunError as exc:
+        raise HttpHeaderTooLarge(exc)
     with io.StringIO(http_header.decode()) as fp:
         start_line = fp.readline()
-        headers = email.message_from_file(fp, _class=HTTPMessage, policy=email.policy.HTTP)
+        headers = email.message_from_file(fp, _class=HttpMessage, policy=email.policy.HTTP)
     body = None
     if headers.get('Transfer-Encoding') == 'chunked':
-        body = await _readuntil(reader, b'\r\n\r\n')
+        with io.BytesIO() as fp:
+            while True:
+                chunk_len_ln = await reader.readuntil(b'\r\n')
+                chunk_len = int(chunk_len_ln[:-2].decode(), 16)
+                if chunk_len == 0: break
+                fp.write(await reader.readexactly(chunk_len))
+                if b'\r\n' != await reader.readexactly(2):
+                    raise HttpException('Chunked encoding error, missing CRLF')
+                if max_body and fp.tell() > max_body:
+                    raise HttpPayloadTooLarge('The size of payload is greater than %d', max_body)
+            fp.seek(0)
+            body = fp.read(-1)
     else:
         content_length = headers['Content-Length']
         if content_length is not None:
             with io.BytesIO() as fp:
-                body = await _readexactly(reader, content_length)
+                body = await reader.readexactly(content_length)
         elif headers.get('Connection') == 'close':
-            body = await _readall(reader)
+            body = await reader.read()
     return start_line, headers, body
 
 
@@ -434,3 +512,31 @@ def parse_uploaded_file(message, content_disposition=None):
     else:
         content = content.encode()
     return UploadedFile(filename, name, content_type, content)
+
+
+class Dispatcher:
+    def __init__(self, dns_server):
+        super().__init__()
+        self.dns_server = dns_server
+
+    def _status(self):
+        return JsonResponse({
+            'server': {
+                'status': self.dns_server.status.name,
+                'upstreams': [vars(up) for up in self.dns_server.upstreams],
+                'stats': [record.as_dict() for record in self.dns_server.stats.records],
+            }
+        })
+
+    def _stop(self, request):
+        pass
+
+    def _restart(self, request):
+        pass
+
+    def dispatch(self, request):
+        match request.method, request.path:
+            case HTTPMethod.GET, '/status': return self._status()
+            case HTTPMethod.POST, '/stop': return self._stop(request)
+            case HTTPMethod.POST, '/restart': return self._start(request)
+        raise HttpNotFound()

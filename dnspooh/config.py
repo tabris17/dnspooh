@@ -78,6 +78,7 @@ DEFAULT_CONFIG = {
         'host': HTTP_HOST,
         'port': HTTP_PORT,
         'timeout': HTTP_TIMEOUT,
+        'static_files': 'web',
     },
 }
 
