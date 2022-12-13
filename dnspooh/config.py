@@ -74,6 +74,9 @@ DEFAULT_CONFIG = {
         'max_size': CACHE_MAX_SIZE,
         'ttl': CACHE_TTL,
     },
+    'hosts': [
+        'hosts'
+    ],
     'http': {
         'host': HTTP_HOST,
         'port': HTTP_PORT,
@@ -138,20 +141,33 @@ class Config:
     def __init__(self, conf):
         self.conf = conf
 
-    def __getitem__(self, key):
+    def _get(self, key):
         if key in self.conf:
             return self.conf[key]
-
         key_nodes = key.split('.')
         value = self.conf
+        for key_node in key_nodes:
+            value = value[key_node]
+        return value
+
+    def get(self, key, default=None):
         try:
-            for key_node in key_nodes:
-                value = value[key_node]
+            return self._get(key)
+        except (KeyError, TypeError):
+            return default
+
+    def __getitem__(self, key):
+        try:
+            return self._get(key)
         except (KeyError, TypeError):
             logger.warning('Configure item "%s" not found', key)
-            return None
 
-        return value
+    def exists(self, key):
+        try:
+            self._get(key)
+            return True
+        except (KeyError, TypeError):
+            return False
 
     @classmethod
     def load(cls, args):

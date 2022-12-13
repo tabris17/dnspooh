@@ -6,6 +6,7 @@ stats:
 
 middlewares:
   - cache
+  - hosts
 
 upstreams:
   - name: 114dns

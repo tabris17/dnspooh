@@ -13,7 +13,7 @@ import random
 from collections import namedtuple
 from http import HTTPStatus, HTTPMethod
 from http.client import HTTPMessage
-from urllib.parse import urlencode, urlsplit, parse_qs
+from urllib.parse import urlencode, urlsplit, parse_qs, quote
 
 from exceptions import HttpException, HttpHeaderTooLarge, HttpPayloadTooLarge, HttpNotFound, InvalidConfig
 
@@ -163,7 +163,7 @@ class Request:
     def url(self, value):
         parsed_url = urlsplit(value)
         self._url = value
-        self.path = parsed_url.path
+        self.path = quote(parsed_url.path)
         if parsed_url.query:
             self.query_string = parsed_url.query
             self.query = parse_qs(parsed_url.query)

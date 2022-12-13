@@ -140,9 +140,8 @@ class Server:
         names = self.config['middlewares']
         for name in names:
             wrapped = middlewares.create_middleware(
-                name, wrapped, self.config[name]
+                name, wrapped, self.config.get(name)
             )
-
         return wrapped
 
     async def _resolve_by_dns(self, query, upstream):

@@ -60,7 +60,7 @@ async def _main():
     try:
         await asyncio.gather(dns_server.run(), http_server.run())
     except asyncio.CancelledError:
-        logger.info('exit.')
+        logger.info('Exit')
 
 
 def main(): asyncio.run(_main())
