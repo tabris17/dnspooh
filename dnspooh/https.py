@@ -521,11 +521,9 @@ class Dispatcher:
 
     def _status(self):
         return JsonResponse({
-            'server': {
-                'status': self.dns_server.status.name,
-                'upstreams': [vars(up) for up in self.dns_server.upstreams],
-                'stats': [record.as_dict() for record in self.dns_server.stats.records],
-            }
+            'status': self.dns_server.status.name,
+            'upstreams': [vars(up) for up in self.dns_server.upstreams],
+            'stats': [record.as_dict() for record in self.dns_server.stats.records],
         })
 
     def _stop(self, request):
