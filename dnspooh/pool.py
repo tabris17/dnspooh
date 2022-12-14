@@ -22,7 +22,7 @@ class PoolStreamReaderProtocol(asyncio.StreamReaderProtocol):
     def connection_lost(self, exc):
         super().connection_lost(exc)
         if self._connection_lost_cb and self.conn:
-            self.conn.exc
+            self.conn.exc = exc
             self._connection_lost_cb(self.conn)
 
     def __init__(self, stream_reader, on_connection_lost=None, **kwds):
