@@ -112,6 +112,7 @@ class Pool:
         return
 
     def on_connection_lost(self, conn):
+        if conn.is_wild(): return
         self.remove(conn)
         logger.debug('Remove "%s" from connection pool', conn.name)
 
