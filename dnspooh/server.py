@@ -72,25 +72,25 @@ class Server:
         self.pool = Pool()
         self.loop = asyncio.get_running_loop() if loop is None else loop
         self.abort_event = asyncio.Event()
-        self.middleware = self._create_middlewares()
+        self.middlewares = self._create_middlewares()
         self.transport = None
         self.stats = Stats(config['stats.max_size'])
         self.status = self.Status.initialized
         self.schedule = []
         logger.debug('DNS serivce initialized')
 
-    async def bootstrap(self, host, port, timeout, upstreams, proxy):
-        self.host = host
-        self.port = port
-        self.timeout = timeout
-        self.upstreams = upstreams
-        self.proxy = proxy
+    async def bootstrap(self):
+        self.host = self.config['host']
+        self.port = self.config['port']
+        self.timeout = self.config['timeout']
+        self.upstreams = self.config['upstreams']
+        self.proxy = self.config['proxy']
         bootstrap_upstreams = []
         hostname_upstreams = []
         grouped_upstreams = dict()
         named_upstreams = dict()
 
-        for upstream in upstreams:
+        for upstream in self.upstreams:
             if upstream.host:
                 bootstrap_upstreams.append(upstream)
             else:
@@ -118,8 +118,10 @@ class Server:
             resolve_upstream_hostname(hostname_upstream, bootstrap_upstreams) \
                 for hostname_upstream in hostname_upstreams
         ])
+        return True
 
     async def test_upstreams(self):
+        # TODO: 
         pass
 
     def create_task(self, coro):
@@ -257,13 +259,17 @@ class Server:
     def on_request(self, data, addr):
         request = DNSRecord.parse(data)
         logger.debug('Received request from %s:%d\n%s' % (addr + (request, )))
-        task = self.loop.create_task((self.middleware if self.middleware else self).handle(request))            
+        task = self.loop.create_task((self.middlewares if self.middlewares else self).handle(request))            
         task.add_done_callback(functools.partial(self.on_response, request, addr))
 
     def abort(self):
         self.status = self.Status.stop_pedding
         logger.info('DNS serivce aborted')
         return self.abort_event.set()
+
+    async def reload(self):
+        # TODO: 
+        pass
 
     async def restart(self):
         self.status = self.Status.restart_pedding
@@ -282,13 +288,9 @@ class Server:
 
     async def run(self):
         self.status = self.Status.start_pedding
-        host = self.config['host']
-        port = self.config['port']
-        timeout = self.config['timeout']
-        upstreams = self.config['upstreams']
-        proxy = self.config['proxy']
-        await self.bootstrap(host, port, timeout, upstreams, proxy)
-
+        if not await self.middlewares.bootstrap():
+            logger.error('Failed to bootstrap')
+            return
         try:
             self.transport, _ = await self.loop.create_datagram_endpoint(
                 lambda: ServerProtocol(self),

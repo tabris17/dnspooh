@@ -52,7 +52,7 @@ class Connection:
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        if exc_type is not None:
+        if exc_type is not None or self.is_wild():
             self.writer.transport.close()
         self.idle = True
 
@@ -117,7 +117,7 @@ class Pool:
 
     async def connect(self, host, port, 
                       scheme=Scheme.tcp, proxy=None, 
-                      limit=DEFAULT_LIMIT, **kwds):
+                      limit=DEFAULT_LIMIT, pooled=True, **kwds):
         conn_name = self._make_conn_name(host, port, scheme, proxy)
         conn = self.get(conn_name)
         if conn:
@@ -134,7 +134,7 @@ class Pool:
                     conn_name, reader, writer, 
                     await proxy.make_udp_tunnel(reader, writer, (host, port))
                 )
-                self.add(conn)
+                if pooled: self.add(conn)
                 return conn
             if not await proxy.handshake(reader, writer, (host, port)):
                 raise ConnectionError('Failed to handshake with proxy "%s"' % (proxy.url, ))
@@ -153,7 +153,7 @@ class Pool:
                 raise ConnectionError('Failed to establish tls connection: %s' % (exc, ))
 
         conn = Connection(conn_name, reader, writer)
-        self.add(conn)
+        if pooled: self.add(conn)
         return conn
 
     @staticmethod
