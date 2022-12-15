@@ -1,11 +1,11 @@
-from server import Server
 
 
 class Middleware:
     @property
     def server(self):
-        if self._server:
+        if hasattr(self, '_server'):
             return self._server
+        from server import Server
         if isinstance(self.next, Server):
             self._server = self.next
             return self._server
@@ -21,8 +21,8 @@ class Middleware:
     def abort(self):
         return self.next.abort()
 
-    async def handle(self, request, **kwarg):
-        return await self.next.handle(request, **kwarg)
+    async def handle(self, request, *args, **kwarg):
+        return await self.next.handle(request, *args, **kwarg)
 
     async def bootstrap(self):
         return await self.next.bootstrap()

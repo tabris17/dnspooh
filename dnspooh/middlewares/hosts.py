@@ -1,13 +1,14 @@
 import logging
 import pathlib
+import ipaddress
+import dnslib
+import io
 import functools
-
-from ipaddress import ip_address
 
 import https
 
 from . import Middleware
-from config import InvalidConfig
+from exceptions import InvalidConfig, HttpException
 from scheme import Scheme
 
 
@@ -17,31 +18,38 @@ logger = logging.getLogger(__name__)
 def _parse_line(ln):
     addr, hostname = ln.split(' ', 1)
     try:
-        ip_addr = ip_address(addr.strip())
+        ip_addr = ipaddress.ip_address(addr.strip())
     except ValueError:
         raise InvalidConfig('Invalid ip address %s' % (addr, ))
     return ip_addr, hostname.strip()
 
+def _parse_file(fp, hosts):
+    for ln in fp:
+        ln = ln.lstrip()
+        if ln == '' or ln.startswith('#'):
+            continue
+        ip_addr, hostname = _parse_line(ln)
+        if hostname in hosts:
+            hosts[hostname].append(ip_addr)
+        else:
+            hosts[hostname] = [ip_addr]
+
 
 class HostsMiddleware(Middleware):
+    DEFAULT_TTL = 60
+
     def _load_hosts_file(self, filename, overwrite=False):
         if filename in self.hosts and not overwrite:
             raise InvalidConfig('Duplicate hosts file %s' % (filename, ))
-        self.hosts[filename] = _hosts = dict()
+        self.hosts[filename] = hosts = dict()
         try:
             with pathlib.Path(filename).open('r') as fp:
                 self.files.append(filename)
-                for ln in fp:
-                    ln = ln.lstrip()
-                    if ln == '' or ln.startswith('#'):
-                        continue
-                    ip_addr, hostname = _parse_line(ln)
-                    if hostname in _hosts:
-                        _hosts[hostname].append(ip_addr)
-                    else:
-                        _hosts[hostname] = [ip_addr]
+                _parse_file(fp, hosts)
         except:
             return False
+        return True
+
 
     async def _load_hosts_url(self, url, overwrite=False):
         splited_url = url.split('|', 1)
@@ -51,11 +59,22 @@ class HostsMiddleware(Middleware):
         if url in self.hosts and not overwrite:
             raise InvalidConfig('Duplicate hosts url %s' % (url, ))
 
-        
-        with await self.server.pool.connect('host', 80, Scheme.tcp) as conn:
-            https.Client('baidu.com', conn)
-        self.hosts[url] = dict()
+        try:
+            response = await https.fetch(url, 
+                                         self.server.handle, 
+                                         self.server.pool, 
+                                         self.server.proxy)
+        except HttpException as exc:
+            logger.warn(str(exc))
+            return False
+        self.hosts[url] = hosts = dict()
         self.urls.append(url)
+        try:
+            with io.StringIO(response.body.decode()) as fp:
+                _parse_file(fp, hosts)
+        except:
+            return False
+        return True
 
     async def bootstrap(self):
         success =  await super().bootstrap()
@@ -75,6 +94,33 @@ class HostsMiddleware(Middleware):
         self.urls = []
         self.filenames = filenames
 
+    def query(self, request):
+        hostname = request.q.qname.idna().rstrip('.')
+        qtype = request.q.qtype
+        response = request.reply()
+        for _, hosts in self.hosts.items():
+            if hostname not in hosts:
+                continue
+            for r in hosts[hostname]:
+                if isinstance(r, ipaddress.IPv6Address) and qtype == dnslib.QTYPE.AAAA:
+                    response.add_answer(dnslib.RR(
+                        hostname, qtype, 
+                        rdata=dnslib.AAAA(str(r)), 
+                        ttl=self.DEFAULT_TTL
+                    ))
+                elif isinstance(r, ipaddress.IPv4Address) and qtype == dnslib.QTYPE.A:
+                    response.add_answer(dnslib.RR(
+                        hostname, qtype, 
+                        rdata=dnslib.A(str(r)), 
+                        ttl=self.DEFAULT_TTL
+                    ))
+        return response if response.header.a > 0 else None
+
     async def handle(self, request, upstreams=None):
-        response = await super().handle(request)
+        if request.header.q > 1 or request.q.qtype not in (dnslib.QTYPE.A, dnslib.QTYPE.AAAA):
+            return await super().handle(request, upstreams)
+        response = self.query(request)
+        if not response:
+            return await super().handle(request, upstreams)
+
         return response

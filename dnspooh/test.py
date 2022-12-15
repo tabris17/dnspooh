@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import https
+import dnslib
 from pool import Pool, Scheme
 from proxy import parse_proxy
 
@@ -46,10 +47,16 @@ async def form_data():
     form_data.append('name123', 'value123213')
     response = await https_client.post('/index.php?asd=123', body=form_data)
 
+async def fetch_url():
+    async def resolver(request):
+        return dnslib.DNSRecord.parse(b'\xfd\xa8\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00\x03raw\x0bhellogithub\x03com\x00\x00\x01\x00\x01\xc0\x0c\x00\x01\x00\x01\x00\x00\x00&\x00\x04\xa5\x9a\x05\x1b')
+    response = await https.fetch('https://raw.hellogithub.com/hosts', resolver, Pool())
+    print(response)
+
 if __name__ == '__main__':
     logging.basicConfig(
         level=logging.DEBUG,
         format="%(asctime)s [%(levelname)s] %(message)s",
         handlers=[logging.StreamHandler()]
     )
-    asyncio.run(form_data())
+    asyncio.run(fetch_url())

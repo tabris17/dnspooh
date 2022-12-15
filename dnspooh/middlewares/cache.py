@@ -16,7 +16,7 @@ class CacheMiddleware(Middleware):
 
     async def handle(self, request, upstreams=None):
         if request.header.q > 1:
-            return await super().handle(request)
+            return await super().handle(request, upstreams)
 
         cache_key = '%s;%s' % (request.q.qname, QTYPE[request.q.qtype])
         if cache_key in self.cache:

@@ -9,16 +9,24 @@ import mimetypes
 import html
 import pathlib
 import random
+import ipaddress
+import dnslib
 
 from collections import namedtuple
 from http import HTTPStatus, HTTPMethod
 from http.client import HTTPMessage
 from urllib.parse import urlencode, urlsplit, parse_qs, quote
 
+from scheme import Scheme
 from exceptions import HttpException, HttpHeaderTooLarge, HttpPayloadTooLarge, HttpNotFound, InvalidConfig
 
 
 HTTP_VERSION = 'HTTP/1.1'
+
+DEFAULT_HTTP_PORT = 80
+
+DEFAULT_HTTPS_PORT = 443
+
 
 logger = logging.getLogger(__name__)
 
@@ -466,6 +474,7 @@ async def _read_http_message(reader, max_body=None):
             body = fp.read(-1)
     else:
         content_length = headers['Content-Length']
+        print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>', content_length)
         if content_length is not None:
             with io.BytesIO() as fp:
                 body = await reader.readexactly(content_length)
@@ -538,3 +547,42 @@ class Dispatcher:
             case HTTPMethod.POST, '/stop': return self._stop(request)
             case HTTPMethod.POST, '/restart': return self._start(request)
         raise HttpNotFound()
+
+
+async def fetch(url, resolver, pool, proxy=None, **kwargs):
+    parsed_url = urlsplit(url)
+    hostname = parsed_url.hostname
+    if parsed_url.scheme == 'http':
+        scheme = Scheme.tcp
+        port = parsed_url.port if parsed_url.port else DEFAULT_HTTP_PORT
+    elif parsed_url.scheme == 'https':
+        scheme = Scheme.tls
+        port = parsed_url.port if parsed_url.port else DEFAULT_HTTPS_PORT
+    else:
+        raise ValueError('Invalid url scheme %s' % (parsed_url.scheme, ))
+    try:
+        ipaddress.ip_address(hostname)
+        host = hostname
+    except ValueError:
+        dns_request = dnslib.DNSRecord.question(hostname)
+        dns_response = await resolver(dns_request)
+        if not dns_response or dns_response.header.a == 0:
+            raise HttpException('Could not resolve domain %s' % (hostname, ))
+        host = str(dns_response.rr[0].rdata)
+    if 'method' in kwargs:
+        method =HTTPMethod(kwargs['method'])
+    else:
+        method = HTTPMethod.GET
+    if method not in (HTTPMethod.GET, HTTPMethod.POST):
+        raise ValueError('Unsupported http method %s' % (method.name, ))
+    url_path = quote(parsed_url.path)
+    if parsed_url.query:
+        url_path = '%s?%s' % (url_path, parsed_url.query)
+    headers = kwargs.get('headers', [])
+
+    with await pool.connect(host, port, scheme, proxy, pooled=False) as conn:
+        if method == HTTPMethod.GET:
+            return await Client(hostname, conn).get(url_path, headers=headers)
+        else:
+            body = kwargs.get('body')
+            return await Client(hostname, conn).post(url_path, headers=headers, body=body)
