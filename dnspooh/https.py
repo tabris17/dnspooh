@@ -474,10 +474,9 @@ async def _read_http_message(reader, max_body=None):
             body = fp.read(-1)
     else:
         content_length = headers['Content-Length']
-        print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>', content_length)
         if content_length is not None:
             with io.BytesIO() as fp:
-                body = await reader.readexactly(content_length)
+                body = await reader.readexactly(int(content_length))
         elif headers.get('Connection') == 'close':
             body = await reader.read()
     return start_line, headers, body
