@@ -76,7 +76,7 @@ class Server:
         self.transport = None
         self.stats = Stats(config['stats.max_size'])
         self.status = self.Status.initialized
-        self.schedule = []
+        self.tasks = []
         logger.debug('DNS serivce initialized')
 
     async def bootstrap(self):
@@ -126,12 +126,12 @@ class Server:
 
     def create_task(self, coro):
         task = self.loop.create_task(coro)
-        self.schedule.append(task)
+        self.tasks.append(task)
         task.add_done_callback(lambda _: self.remove_task(task))
         return task
 
     def remove_task(self, task):
-        self.schedule.remove(task)
+        self.tasks.remove(task)
 
     def _get_proxy(self, upstream):
         return self.proxy if upstream.proxy is None \
