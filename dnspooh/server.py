@@ -125,7 +125,7 @@ class Server:
         pass
 
     def create_task(self, coro, name=None, context=None):
-        task = self.loop.create_task(coro, name, context)
+        task = self.loop.create_task(coro, name=name, context=context)
         self.tasks.append(task)
         task.add_done_callback(lambda _: self.remove_task(task))
         return task
