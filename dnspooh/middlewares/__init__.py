@@ -1,5 +1,7 @@
 import sys
 
+import dnslib
+
 
 __all__ = ('Middleware', 'ReassembleMiddleware', 'FragmentMiddleware', 
            'CacheMiddleware', 'HostsMiddleware')
@@ -77,6 +79,7 @@ class ReassembleMiddleware(Middleware):
         self.reassembled_request = None
 
     async def __aenter__(self):
+        self.reassembled_request = dnslib.DNSRecord()
         print("in aenter")
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
