@@ -74,6 +74,7 @@ class ReassembleMiddleware(Middleware):
     def __init__(self, next):
         super().__init__(next)
         self.started = False
+        self.reassembled_request = None
 
     async def __aenter__(self):
         print("in aenter")
@@ -82,6 +83,8 @@ class ReassembleMiddleware(Middleware):
         await self.handle()
 
     async def handle(self, request, *args, **kwarg):
+        if self.started:
+            pass
         return await self.next.handle(request, *args, **kwarg)
 
 
@@ -91,5 +94,8 @@ class FragmentMiddleware(Middleware):
         self.reassemble = self.get_component('reassemble')
 
     async def handle(self, request, *args, **kwarg):
-        async with self.reassemble:
+        if request.header.q > 1:
+            async with self.reassemble:
+                pass
             pass
+        return self.next.handle(self, request, *args, **kwarg)
