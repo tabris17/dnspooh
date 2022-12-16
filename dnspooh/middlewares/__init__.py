@@ -1,14 +1,18 @@
 import sys
 
-from .cache import CacheMiddleware
-from .hosts import HostsMiddleware
+
+__all__ = ('Middleware', 'ReassembleMiddleware', 'FragmentMiddleware', 
+           'CacheMiddleware', 'HostsMiddleware')
 
 
-__all__ = ('Middleware', 'CacheMiddleware', 'HostsMiddleware')
+def _middleware_name_to_class_name(name):
+    return ''.join(
+        [_.capitalize() for _ in name.split('_')]
+    ) + 'Middleware'
 
 
 def create_middleware(name, next, config):
-    class_name = ''.join([_.capitalize() for _ in name.split('_')]) + 'Middleware'
+    class_name = _middleware_name_to_class_name(name)
     if class_name not in __all__: return next
     middleware_class = getattr(sys.modules[__name__], class_name)
     if config is None:
@@ -32,6 +36,14 @@ class Middleware:
         self._server =  self.next.server
         return self._server
 
+    def get_component(self, name):
+        class_name = _middleware_name_to_class_name(name)
+        if __class__.__name__ == class_name:
+            return self
+        if not hasattr(self.next, self.get_component.__name__):
+            raise ValueError('Middleware %s not found' % (name, ))
+        return self.next.get_component(name)
+
     def __init__(self, next):
         self.next = next
 
@@ -52,3 +64,32 @@ class Middleware:
 
     async def reload(self):
         return await self.next.reload()
+
+
+from .cache import CacheMiddleware
+from .hosts import HostsMiddleware
+
+
+class ReassembleMiddleware(Middleware):
+    def __init__(self, next):
+        super().__init__(next)
+        self.started = False
+
+    async def __aenter__(self):
+        print("in aenter")
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.handle()
+
+    async def handle(self, request, *args, **kwarg):
+        return await self.next.handle(request, *args, **kwarg)
+
+
+class FragmentMiddleware(Middleware):
+    def __init__(self, next):
+        super().__init__(next)
+        self.reassemble = self.get_component('reassemble')
+
+    async def handle(self, request, *args, **kwarg):
+        async with self.reassemble:
+            pass

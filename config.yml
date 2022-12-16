@@ -5,7 +5,6 @@ stats:
   max_size: 200
 
 hosts:
-  - hosts
   - https://raw.hellogithub.com/hosts
 
 middlewares:

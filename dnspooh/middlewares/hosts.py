@@ -6,10 +6,10 @@ import io
 import functools
 
 import https
+import timers
 
 from . import Middleware
 from exceptions import InvalidConfig, HttpException
-from scheme import Scheme
 
 
 logger = logging.getLogger(__name__)
@@ -39,6 +39,7 @@ class HostsMiddleware(Middleware):
     DEFAULT_TTL = 60
 
     def _load_hosts_file(self, filename, overwrite=False):
+        logger.debug('Loading hosts file (filename=%s; overwrite=%s)' % (filename, overwrite))
         if filename in self.hosts and not overwrite:
             raise InvalidConfig('Duplicate hosts file %s' % (filename, ))
         self.hosts[filename] = hosts = dict()
@@ -46,16 +47,23 @@ class HostsMiddleware(Middleware):
             with pathlib.Path(filename).open('r') as fp:
                 self.files.append(filename)
                 _parse_file(fp, hosts)
-        except:
+        except Exception as exc:
+            logger.warning('Failed to load hosts file (filename=%s; overwrite=%s; exc=%s)' % (filename, overwrite, exc))
             return False
+        logger.debug('Succeeded to load hosts file (filename=%s; overwrite=%s)' % (filename, overwrite))
         return True
 
 
     async def _load_hosts_url(self, url, overwrite=False):
+        logger.debug('Loading hosts url (url=%s; overwrite=%s)' % (url, overwrite))
         splited_url = url.split('|', 1)
         if len(splited_url) > 1:
             url, reload_interval = splited_url
-            # TODO:
+            self.server.create_scheduled_task(
+                functools.partial(self._load_hosts_url, url, True),
+                timers.Timer(reload_interval), 
+                '[SCHEDULE] fetching hosts (url=%s)' % (url, )
+            )
         if url in self.hosts and not overwrite:
             raise InvalidConfig('Duplicate hosts url %s' % (url, ))
 
@@ -65,15 +73,17 @@ class HostsMiddleware(Middleware):
                                          self.server.pool, 
                                          self.server.proxy)
         except HttpException as exc:
-            logger.warn(str(exc))
+            logger.warning('Failed to load hosts url (url=%s; overwrite=%s; exc=%s)' % (url, overwrite, exc))
             return False
         self.hosts[url] = hosts = dict()
         self.urls.append(url)
         try:
             with io.StringIO(response.body.decode()) as fp:
                 _parse_file(fp, hosts)
-        except:
+        except Exception as exc:
+            logger.warning('Failed to load hosts url (url=%s; overwrite=%s; exc=%s)' % (url, overwrite, exc))
             return False
+        logger.debug('Succeeded to load hosts url (url=%s; overwrite=%s)' % (url, overwrite))
         return True
 
     async def bootstrap(self):

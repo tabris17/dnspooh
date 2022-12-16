@@ -26,9 +26,9 @@ class PoolStreamReaderProtocol(asyncio.StreamReaderProtocol):
             self._connection_lost_cb(self.conn)
 
     def __init__(self, stream_reader, on_connection_lost=None, **kwds):
-        super().__init__(stream_reader, **kwds)
         self._connection_lost_cb = on_connection_lost
         self.conn = None
+        super().__init__(stream_reader, **kwds)
 
 
 class Connection:
@@ -39,12 +39,13 @@ class Connection:
         self.udp_tunnel = udp_tunnel
         self.exc = None
         self.idle = True
+        self._is_wild = True
 
     def is_wild(self):
-        return self.writer.transport\
-            .get_protocol().conn is None
+        return self._is_wild
 
     def register(self):
+        self._is_wild = False
         self.writer.transport.get_protocol().conn = self
 
     def __enter__(self):
@@ -112,7 +113,6 @@ class Pool:
         return
 
     def on_connection_lost(self, conn):
-        if conn.is_wild(): return
         self.remove(conn)
         logger.debug('Remove "%s" from connection pool', conn.name)
 

@@ -130,6 +130,14 @@ class Server:
         task.add_done_callback(lambda _: self.remove_task(task))
         return task
 
+    def create_scheduled_task(self, coro, timer, name=None, context=None):
+        async def _task():
+            async for i in timer:
+                logger.debug('Schedule task "%s" repeat times %d' % (name, i))
+                await coro()
+
+        return self.create_task(_task(), name, context)
+
     def remove_task(self, task):
         self.tasks.remove(task)
 
