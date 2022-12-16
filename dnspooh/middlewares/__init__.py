@@ -85,7 +85,9 @@ class ReassembleMiddleware(Middleware):
     async def handle(self, request, *args, **kwarg):
         if self.started:
             pass
-        return await self.next.handle(request, *args, **kwarg)
+        else:
+            self.reassembled_request = request
+        return await self.next.handle(self.reassembled_request, *args, **kwarg)
 
 
 class FragmentMiddleware(Middleware):
