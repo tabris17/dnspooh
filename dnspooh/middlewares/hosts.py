@@ -16,12 +16,16 @@ logger = logging.getLogger(__name__)
 
 
 def _parse_line(ln):
-    addr, hostname = ln.split(' ', 1)
+    _addr, _hostname = ln.split(' ', 1)
+    addr = _addr.strip()
+    hostname = _hostname.strip()
+    if addr == '-':
+        return None, hostname
     try:
-        ip_addr = ipaddress.ip_address(addr.strip())
+        ip_addr = ipaddress.ip_address(addr)
     except ValueError:
         raise InvalidConfig('Invalid ip address %s' % (addr, ))
-    return ip_addr, hostname.strip()
+    return ip_addr, hostname
 
 def _parse_file(fp, hosts):
     for ln in fp:
@@ -29,10 +33,18 @@ def _parse_file(fp, hosts):
         if ln == '' or ln.startswith('#'):
             continue
         ip_addr, hostname = _parse_line(ln)
-        if hostname in hosts:
-            hosts[hostname].append(ip_addr)
-        else:
+        if ip_addr is None:
+            hosts[hostname] = None
+        elif hostname not in hosts:
             hosts[hostname] = [ip_addr]
+        elif hosts[hostname] is not None:
+            hosts[hostname].append(ip_addr)
+
+
+def _response_nxdomain(request):
+    response = request.reply()
+    response.header.rcode = getattr(dnslib.RCODE, 'NXDOMAIN')
+    return response
 
 
 class HostsMiddleware(Middleware):
@@ -52,7 +64,6 @@ class HostsMiddleware(Middleware):
             return False
         logger.debug('Succeeded to load hosts file (filename=%s; overwrite=%s)' % (filename, overwrite))
         return True
-
 
     async def _load_hosts_url(self, url, overwrite=False):
         logger.debug('Loading hosts url (url=%s; overwrite=%s)' % (url, overwrite))
@@ -111,7 +122,10 @@ class HostsMiddleware(Middleware):
         for _, hosts in self.hosts.items():
             if hostname not in hosts:
                 continue
-            for r in hosts[hostname]:
+            ip_addrs = hosts[hostname]
+            if ip_addrs is None:
+                return _response_nxdomain(request)
+            for r in ip_addrs:
                 if isinstance(r, ipaddress.IPv6Address) and qtype == dnslib.QTYPE.AAAA:
                     response.add_answer(dnslib.RR(
                         hostname, qtype, 
