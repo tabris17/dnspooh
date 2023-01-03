@@ -6,6 +6,13 @@ from pool import Pool, Scheme
 from proxy import parse_proxy
 
 
+def dns_query():
+    request = dnslib.DNSRecord.question('baidu.com')
+    request.add_question(dnslib.DNSQuestion('qq.com'))
+    logging.info(request)
+    response = dnslib.DNSRecord.parse(request.send('127.0.0.1'))
+    logging.info(response)
+
 async def proxy():
     pool = Pool()
     proxy = parse_proxy('socks5://127.0.0.1:7890')
@@ -59,4 +66,5 @@ if __name__ == '__main__':
         format="%(asctime)s [%(levelname)s] %(message)s",
         handlers=[logging.StreamHandler()]
     )
-    asyncio.run(fetch_url())
+    dns_query()
+    #asyncio.run(fetch_url())

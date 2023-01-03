@@ -141,7 +141,7 @@ class HostsMiddleware(Middleware):
         return response if response.header.a > 0 else None
 
     async def handle(self, request, upstreams=None):
-        if request.header.q > 1 or request.q.qtype not in (dnslib.QTYPE.A, dnslib.QTYPE.AAAA):
+        if request.q.qtype not in (dnslib.QTYPE.A, dnslib.QTYPE.AAAA):
             return await super().handle(request, upstreams)
         response = self.query(request)
         if not response:

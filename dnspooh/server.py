@@ -5,7 +5,7 @@ import struct
 import functools
 import enum
 
-from dnslib import DNSRecord, DNSError
+from dnslib import DNSRecord, DNSError, DNSHeader
 
 import https
 import middlewares
@@ -255,6 +255,24 @@ class Server:
             except TimeoutError:
                 logger.info('Upstream server %s:%d response timeout' % upstream.to_addr())
 
+    async def _handle(self, request):
+        resolver = self.middlewares if self.middlewares else self
+        if request.header.q > 1:
+            coroutines = []
+            for q in request.questions:
+                _req = request.truncate()
+                _req.add_question(q)
+                coroutines.append(resolver.handle(_req))
+            response = DNSRecord(DNSHeader(id=request.header.id,
+                                           bitmap=request.header.bitmap,
+                                           qr=1, ra=1, aa=1),
+                                questions=request.questions)
+            for _resp in await asyncio.gather(*coroutines):
+                if _resp and _resp.header.a > 0:
+                    response.add_answer(_resp.a)
+            return response
+        return await resolver.handle(request)
+
     def on_response(self, request, addr, future):
         response = future.result()
         if response is None:
@@ -267,7 +285,7 @@ class Server:
     def on_request(self, data, addr):
         request = DNSRecord.parse(data)
         logger.debug('Received request from %s:%d\n%s' % (addr + (request, )))
-        task = self.loop.create_task((self.middlewares if self.middlewares else self).handle(request))            
+        task = self.loop.create_task(self._handle(request))
         task.add_done_callback(functools.partial(self.on_response, request, addr))
 
     def abort(self):

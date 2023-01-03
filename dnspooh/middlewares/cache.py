@@ -15,9 +15,6 @@ class CacheMiddleware(Middleware):
         self.cache = TTLCache(maxsize=max_size, ttl=ttl)
 
     async def handle(self, request, upstreams=None):
-        if request.header.q > 1:
-            return await super().handle(request, upstreams)
-
         cache_key = '%s;%s' % (request.q.qname, QTYPE[request.q.qtype])
         if cache_key in self.cache:
             logger.debug('Cache hit "%s"', cache_key)
