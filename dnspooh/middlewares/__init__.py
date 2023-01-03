@@ -70,37 +70,3 @@ class Middleware:
 
 from .cache import CacheMiddleware
 from .hosts import HostsMiddleware
-
-
-class ReassembleMiddleware(Middleware):
-    def __init__(self, next):
-        super().__init__(next)
-        self.started = False
-        self.reassembled_request = None
-
-    async def __aenter__(self):
-        self.reassembled_request = dnslib.DNSRecord()
-        print("in aenter")
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.handle()
-
-    async def handle(self, request, *args, **kwarg):
-        if self.started:
-            pass
-        else:
-            self.reassembled_request = request
-        return await self.next.handle(self.reassembled_request, *args, **kwarg)
-
-
-class FragmentMiddleware(Middleware):
-    def __init__(self, next):
-        super().__init__(next)
-        self.reassemble = self.get_component('reassemble')
-
-    async def handle(self, request, *args, **kwarg):
-        if request.header.q > 1:
-            async with self.reassemble:
-                pass
-            pass
-        return self.next.handle(self, request, *args, **kwarg)
