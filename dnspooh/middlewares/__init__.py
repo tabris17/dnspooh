@@ -3,8 +3,7 @@ import sys
 import dnslib
 
 
-__all__ = ('Middleware', 'ReassembleMiddleware', 'FragmentMiddleware', 
-           'CacheMiddleware', 'HostsMiddleware')
+__all__ = ('Middleware', 'CacheMiddleware', 'HostsMiddleware')
 
 
 def _middleware_name_to_class_name(name):
