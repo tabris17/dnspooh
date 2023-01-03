@@ -2,6 +2,8 @@ import asyncio
 import ssl
 import logging
 
+import certifi
+
 from scheme import Scheme
 
 
@@ -148,7 +150,8 @@ class Pool:
 
         if scheme == Scheme.tls:
             try:
-                transport = await self.loop.start_tls(transport, protocol, ssl.create_default_context())
+                ssl_context = ssl.create_default_context(cafile=certifi.where())
+                transport = await self.loop.start_tls(transport, protocol, ssl_context)
                 writer = asyncio.StreamWriter(transport, protocol, reader, self.loop)
             except ssl.SSLError as exc:
                 raise ConnectionError('Failed to establish tls connection: %s' % (exc, ))

@@ -21,7 +21,7 @@ upstreams:
 
   - name: alidns-https
     url: https://dns.alidns.com/dns-query
-    priority: 0
+    priority: 100
 
   - name: alidns-tls
     host: dns.alidns.com
