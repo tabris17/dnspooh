@@ -1,3 +1,5 @@
+import functools
+
 from urllib.parse import urlsplit
 from ipaddress import ip_address
 
@@ -9,10 +11,44 @@ DEFAULT_DNS_PORT = 53
 DEFAULT_HTTPS_PORT = 443
 
 
-class Upstreams:
-    def __init__(self):
-        self._default = list()
+class UpstreamCollection:
+    def __init__(self, upstreams):
+        self._upstreams = upstreams
+        self._default_group = []
         self._grouped = dict()
+        for upstream in upstreams:
+            if upstream.group in self._grouped:
+                self._grouped[upstream.group].append(upstream)
+            else:
+                self._grouped[upstream.group] = [upstream]
+        self._named = {upstream.name: upstream for upstream in upstreams}
+        self._sorted = upstreams.copy()
+        self._pinned = None
+        self.sort()
+
+    def _cmp(self, up1, up2):
+        if up1.name == self._pinned: return 1
+        if up2.name == self._pinned: return -1
+        return up1.priority - up2.priority
+
+    def sort(self):
+        self._sorted.sort(reverse=True, key=functools.cmp_to_key(self._cmp))
+        for upstreams in self._grouped.values():
+            upstreams.sort(reverse=True, key=functools.cmp_to_key(self._cmp))
+        return self
+
+    def all(self):
+        return self._upstreams.copy()
+
+    def group(self, name):
+        self._grouped.get(name, self._default_group).copy()
+
+    def sorted(self):
+        return self._sorted.copy()
+
+    def pinned(self, name):
+        self._pinned = name
+        return self
 
 
 class Upstream:
@@ -24,6 +60,7 @@ class Upstream:
         self.priority = kwargs.get('priority', 0)
         self.success = 0
         self.usage = 0
+        self.disable = False
 
     def __repr__(self):
         return str(vars(self))

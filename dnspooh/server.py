@@ -4,6 +4,7 @@ import logging
 import struct
 import functools
 import enum
+import time
 
 from dnslib import DNSRecord, DNSError, DNSHeader
 
@@ -12,8 +13,9 @@ import middlewares
 from config import DnsUpstream, HttpsUpstream, TlsUpstream
 from pool import Pool
 from scheme import Scheme
-from exceptions import EmptyValueError, UnexpectedValueError
+from exceptions import EmptyValueError, UnexpectedValueError, HttpException
 from stats import Stats
+from upstream import UpstreamCollection
 
 
 logger = logging.getLogger(__name__)
@@ -80,17 +82,18 @@ class Server:
         logger.debug('DNS serivce initialized')
 
     async def bootstrap(self):
+        logger.info('DNS service bootstrapping')
         self.host = self.config['host']
         self.port = self.config['port']
         self.timeout = self.config['timeout']
-        self.upstreams = self.config['upstreams']
+        self.upstreams = UpstreamCollection(self.config['upstreams'])
         self.proxy = self.config['proxy']
         bootstrap_upstreams = []
         hostname_upstreams = []
         grouped_upstreams = dict()
         named_upstreams = dict()
 
-        for upstream in self.upstreams:
+        for upstream in self.upstreams.all():
             if upstream.host:
                 bootstrap_upstreams.append(upstream)
             else:
@@ -111,18 +114,34 @@ class Server:
             request = DNSRecord.question(hostname_upstream.hostname)
             response = await self.handle(request, upstreams=bootstrap_upstreams)
             if not response or response.header.a == 0:
-                raise RuntimeError('Failed to bootstrap: cannot resolve "%s"' % (hostname_upstream.hostname, ))
-            hostname_upstream.host = str(response.rr[0].rdata)
+                logger.warning('Failed to resolve upstream domain "%s"', hostname_upstream.hostname)
+                hostname_upstream.disable = True
+            else:
+                hostname_upstream.host = str(response.rr[0].rdata)
 
         await asyncio.gather(*[
             resolve_upstream_hostname(hostname_upstream, bootstrap_upstreams) \
                 for hostname_upstream in hostname_upstreams
         ])
+
+        await self.test_upstreams('google.com')
         return True
 
-    async def test_upstreams(self):
-        # TODO: 
-        pass
+    async def test_upstreams(self, hostname):
+        request = DNSRecord.question(hostname)
+        async def test_upstream(upstream):
+            start_counter = time.perf_counter()
+            response = await self.handle(request, upstreams=[upstream])
+            cost_time = time.perf_counter() - start_counter
+            if not response or response.header.a == 0:
+                upstream.disable = True
+                upstream.priority = -1
+            else:
+                timeout = self._get_timeout(upstream)
+                upstream.priority = int((timeout - cost_time) / timeout * 1000)
+
+        await asyncio.gather(*[test_upstream(_) for _ in self.upstreams.all() if not _.disable])
+        self.upstreams.sort()
 
     def create_task(self, coro, name=None, context=None):
         task = self.loop.create_task(coro, name=name, context=context)
@@ -160,12 +179,16 @@ class Server:
 
         proxy = self._get_proxy(upstream)
         if proxy and proxy.udp_tunnel_enabled():
-            conn = await self.pool.connect(
-                upstream.host, 
-                upstream.port, 
-                Scheme.udp, 
-                proxy
-            )
+            try:
+                conn = await self.pool.connect(
+                    upstream.host, 
+                    upstream.port, 
+                    Scheme.udp, 
+                    proxy
+                )
+            except ConnectionError as exc:
+                logger.error(exc)
+                return
             transport, _ = await self.loop.create_datagram_endpoint(
                 lambda: QueryProtocol(
                     conn.udp_tunnel.pack(query, upstream_addr), 
@@ -193,37 +216,51 @@ class Server:
         return response
 
     async def _resolve_by_https(self, query, upstream):
-        with await self.pool.connect(
-            upstream.host, 
-            upstream.port, 
-            Scheme.tls, 
-            self._get_proxy(upstream)
-        ) as conn:
-            q = base64.b64encode(query).decode().rstrip('=')
-            return (await https.Client(upstream.hostname, conn).get(
-                upstream.path,
-                {'dns': q}, 
-                [("Content-type", "application/dns-message")]
-            )).body
+        try:
+            with await self.pool.connect(
+                upstream.host, 
+                upstream.port, 
+                Scheme.tls, 
+                self._get_proxy(upstream)
+            ) as conn:
+                q = base64.b64encode(query).decode().rstrip('=')
+                return (await https.Client(upstream.hostname, conn).get(
+                    upstream.path,
+                    {'dns': q}, 
+                    [("Content-type", "application/dns-message")]
+                )).body
+        except HttpException as exc:
+            logger.error('HTTP exception: %s', exc)
+        except ConnectionError as exc:
+            logger.error('Connection error: %s', exc)
 
     async def _resolve_by_tls(self, query, upstream):
-        with await self.pool.connect(
-            upstream.host, 
-            upstream.port, 
-            Scheme.tls, 
-            self._get_proxy(upstream)
-        ) as conn:
-            query_size = struct.pack('!H', len(query))
-            conn.writer.write(query_size + query)
-            await conn.writer.drain()
-            response_head = await conn.reader.readexactly(2)
-            response_size = struct.unpack('!H', response_head)[0]
-            return await conn.reader.readexactly(response_size)
+        try:
+            with await self.pool.connect(
+                upstream.host, 
+                upstream.port, 
+                Scheme.tls, 
+                self._get_proxy(upstream)
+            ) as conn:
+                query_size = struct.pack('!H', len(query))
+                conn.writer.write(query_size + query)
+                await conn.writer.drain()
+                response_head = await conn.reader.readexactly(2)
+                response_size = struct.unpack('!H', response_head)[0]
+                return await conn.reader.readexactly(response_size)
+        except asyncio.exceptions.IncompleteReadError:
+            logger.error('Failed to read data from %s:%d', upstream.host, upstream.port)
+        except ConnectionError as exc:
+            logger.error('Connection error: %s', exc)
+
+    def _get_timeout(self, upstream):
+        return self.timeout if upstream.timeout is None else upstream.timeout
 
     async def handle(self, request, **kwargs):
         logger.debug('DNS query:\n%s', request)
         data = DNSRecord.pack(request)
-        for upstream in (self.upstreams if 'upstreams' not in kwargs else kwargs['upstreams']):
+        for upstream in (self.upstreams.sorted() if 'upstreams' not in kwargs else kwargs['upstreams']):
+            if upstream.disable: continue
             if isinstance(upstream, DnsUpstream):
                 resolver = self._resolve_by_dns
             elif isinstance(upstream, HttpsUpstream):
@@ -237,7 +274,7 @@ class Server:
                 with self.stats.record(upstream):
                     response_data = await asyncio.wait_for(
                         asyncio.shield(resolver(data, upstream)), 
-                        self.timeout if upstream.timeout is None else upstream.timeout
+                        self._get_timeout(upstream)
                     )
                     if response_data is None:
                         raise EmptyValueError('Empty response data received')
@@ -249,7 +286,6 @@ class Server:
                         raise UnexpectedValueError('Response id does not match')
                     logger.debug('DNS response:\n%s', response)
                     return response
-
             except ValueError:
                 logger.warning('Failed to resolve by %s:%d' % upstream.to_addr())
             except TimeoutError:

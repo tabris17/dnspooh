@@ -3,7 +3,7 @@ import sys
 import dnslib
 
 
-__all__ = ('Middleware', 'CacheMiddleware', 'HostsMiddleware')
+__all__ = ('Middleware', 'CacheMiddleware', 'HostsMiddleware', 'RulesMiddleware')
 
 
 def _middleware_name_to_class_name(name):
@@ -54,8 +54,8 @@ class Middleware:
     def abort(self):
         return self.next.abort()
 
-    async def handle(self, request, *args, **kwarg):
-        return await self.next.handle(request, *args, **kwarg)
+    async def handle(self, request, **kwargs):
+        return await self.next.handle(request, **kwargs)
 
     async def bootstrap(self):
         return await self.next.bootstrap()
@@ -69,3 +69,4 @@ class Middleware:
 
 from .cache import CacheMiddleware
 from .hosts import HostsMiddleware
+from .rules import RulesMiddleware

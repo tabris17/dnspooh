@@ -129,8 +129,11 @@ class Pool:
         reader = asyncio.StreamReader(limit=limit, loop=self.loop)
         protocol = PoolStreamReaderProtocol(reader, self.on_connection_lost, loop=self.loop)
         if proxy:
-            transport, _ = await self.loop.create_connection(
-                lambda: protocol, proxy.host, proxy.port, **kwds)
+            try:
+                transport, _ = await self.loop.create_connection(
+                    lambda: protocol, proxy.host, proxy.port, **kwds)
+            except OSError as exc:
+                raise ConnectionError('Cannot connect to proxy "%s:%d": %s' % (proxy.host, proxy.port, exc))
             writer = asyncio.StreamWriter(transport, protocol, reader, self.loop)
             if scheme == Scheme.udp:
                 conn = Connection(
@@ -144,8 +147,11 @@ class Pool:
         elif scheme == Scheme.udp:
             raise ConnectionError('Naked UDP protocol does not supported')
         else:
-            transport, _ = await self.loop.create_connection(
-                lambda: protocol, host, port, **kwds)
+            try:
+                transport, _ = await self.loop.create_connection(
+                    lambda: protocol, host, port, **kwds)
+            except OSError as exc:
+                raise ConnectionError('Cannot connect to server "%s:%d": %s' % (host, port, exc))
             writer = asyncio.StreamWriter(transport, protocol, reader, self.loop)
 
         if scheme == Scheme.tls:
