@@ -1,13 +1,12 @@
 #proxy: socks5://127.0.0.1:7890
-timeout: 5
-
-stats:
-  max_size: 200
 
 hosts:
   - https://raw.hellogithub.com/hosts
 
+rules:
+ - DOMAIN-SUFFIX 
+
 middlewares:
-  - rules
+  #- rules
   - cache
   - hosts

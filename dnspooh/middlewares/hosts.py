@@ -15,19 +15,21 @@ from exceptions import InvalidConfig, HttpException
 logger = logging.getLogger(__name__)
 
 
-def _parse_line(ln):
-    _addr, _hostname = ln.split(' ', 1)
-    addr = _addr.strip()
-    hostname = _hostname.strip()
-    if addr == '-':
-        return None, hostname
-    try:
-        ip_addr = ipaddress.ip_address(addr)
-    except ValueError:
-        raise InvalidConfig('Invalid ip address %s' % (addr, ))
-    return ip_addr, hostname
-
 def _parse_file(fp, hosts):
+    def _parse_line(ln):
+        _addr, _hostname = ln.split(' ', 1)
+        addr = _addr.strip()
+        hostname = _hostname.strip()
+        if addr == '-':
+            return None, hostname
+        elif hostname.startswith('*'):
+            raise InvalidConfig('Invalid domain name %s' % (hostname, ))
+        try:
+            ip_addr = ipaddress.ip_address(addr)
+        except ValueError:
+            raise InvalidConfig('Invalid ip address %s' % (addr, ))
+        return ip_addr, hostname
+
     for ln in fp:
         ln = ln.lstrip()
         if ln == '' or ln.startswith('#'):
@@ -119,8 +121,14 @@ class HostsMiddleware(Middleware):
         hostname = request.q.qname.idna().rstrip('.')
         qtype = request.q.qtype
         response = request.reply()
-        for _, hosts in self.hosts.items():
+        for hosts in self.hosts.values():
             if hostname not in hosts:
+                rpos = hostname.rfind('.')
+                while rpos > 0:
+                    suffix_hostname = '*' + hostname[rpos:]
+                    if hosts.get(suffix_hostname, False) is None:
+                        return _response_nxdomain(request)
+                    rpos = hostname.rfind('.', 0, rpos)
                 continue
             ip_addrs = hosts[hostname]
             if ip_addrs is None:

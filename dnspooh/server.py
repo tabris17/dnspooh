@@ -136,9 +136,11 @@ class Server:
             if not response or response.header.a == 0:
                 upstream.disable = True
                 upstream.priority = -1
+                logger.warning('Test upstream %s error', upstream.name)
             else:
                 timeout = self._get_timeout(upstream)
                 upstream.priority = int((timeout - cost_time) / timeout * 1000)
+                logger.info('Test upstream %s OK', upstream.name)
 
         await asyncio.gather(*[test_upstream(_) for _ in self.upstreams.all() if not _.disable])
         self.upstreams.sort()
@@ -187,7 +189,7 @@ class Server:
                     proxy
                 )
             except ConnectionError as exc:
-                logger.error(exc)
+                logger.warning(exc)
                 return
             transport, _ = await self.loop.create_datagram_endpoint(
                 lambda: QueryProtocol(
@@ -230,9 +232,9 @@ class Server:
                     [("Content-type", "application/dns-message")]
                 )).body
         except HttpException as exc:
-            logger.error('HTTP exception: %s', exc)
+            logger.warning('HTTP exception: %s', exc)
         except ConnectionError as exc:
-            logger.error('Connection error: %s', exc)
+            logger.warning(exc)
 
     async def _resolve_by_tls(self, query, upstream):
         try:
@@ -251,7 +253,7 @@ class Server:
         except asyncio.exceptions.IncompleteReadError:
             logger.error('Failed to read data from %s:%d', upstream.host, upstream.port)
         except ConnectionError as exc:
-            logger.error('Connection error: %s', exc)
+            logger.warning(exc)
 
     def _get_timeout(self, upstream):
         return self.timeout if upstream.timeout is None else upstream.timeout

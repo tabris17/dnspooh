@@ -15,7 +15,7 @@ VERSION = '0.1.0'
 
 LISTEN_HOST = '0.0.0.0'
 
-UPSTREAM_TIMEOUT = 1
+UPSTREAM_TIMEOUT = 5
 
 HTTP_TIMEOUT = 10
 
@@ -157,14 +157,28 @@ BUILTIN_UPSTREAMS = [
     {
         'name': 'onedns-1',
         'type': 'dns',
-        'host': '170.50.11.11',
+        'host': '117.50.10.10',
         'port': DEFAULT_DNS_PORT,
         'group': 'onedns',
     },
     {
         'name': 'onedns-2',
         'type': 'dns',
-        'host': '52.80.66.66',
+        'host': '52.80.52.52',
+        'port': DEFAULT_DNS_PORT,
+        'group': 'onedns',
+    },
+    {
+        'name': 'onedns-ipv6-1',
+        'type': 'dns',
+        'host': '2400:7fc0:849e:200::4',
+        'port': DEFAULT_DNS_PORT,
+        'group': 'onedns',
+    },
+    {
+        'name': 'onedns-ipv6-2',
+        'type': 'dns',
+        'host': '2404:c2c0:85d8:901::4',
         'port': DEFAULT_DNS_PORT,
         'group': 'onedns',
     },
@@ -251,6 +265,20 @@ BUILTIN_UPSTREAMS = [
         'port': DEFAULT_DNS_PORT,
         'group': 'opendns',
     },
+    {
+        'name': 'adguard-1',
+        'type': 'dns',
+        'host': '94.140.14.14',
+        'port': DEFAULT_DNS_PORT,
+        'group': 'adguard',
+    },
+    {
+        'name': 'adguard-2',
+        'type': 'dns',
+        'host': '94.140.15.15',
+        'port': DEFAULT_DNS_PORT,
+        'group': 'adguard',
+    },
 ]
 
 DEFAULT_CONFIG = {
@@ -276,6 +304,7 @@ DEFAULT_CONFIG = {
         'timeout': HTTP_TIMEOUT,
         'static_files': 'web',
     },
+    'middlewares': [],
 }
 
 
