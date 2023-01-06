@@ -12,34 +12,6 @@ from exceptions import InvalidConfig
 logger = logging.getLogger(__name__)
 
 
-def _parse_file(fp, hosts):
-    def _parse_line(ln):
-        _addr, _hostname = ln.split(' ', 1)
-        addr = _addr.strip()
-        hostname = _hostname.strip()
-        if addr == '-':
-            return None, hostname
-        elif hostname.startswith('*'):
-            raise InvalidConfig('Invalid domain name %s' % (hostname, ))
-        try:
-            ip_addr = ipaddress.ip_address(addr)
-        except ValueError:
-            raise InvalidConfig('Invalid ip address %s' % (addr, ))
-        return ip_addr, hostname
-
-    for ln in fp:
-        ln = ln.lstrip()
-        if ln == '' or ln.startswith('#'):
-            continue
-        ip_addr, hostname = _parse_line(ln)
-        if ip_addr is None:
-            hosts[hostname] = None
-        elif hostname not in hosts:
-            hosts[hostname] = [ip_addr]
-        elif hosts[hostname] is not None:
-            hosts[hostname].append(ip_addr)
-
-
 def _nxdomain(request):
     response = request.reply()
     response.header.rcode = getattr(dnslib.RCODE, 'NXDOMAIN')
