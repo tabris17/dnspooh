@@ -55,10 +55,9 @@ class BlockMiddleware(Middleware):
                 )
             else:
                 filename = _file
-            if not self.is_loaded(filename):
-                await self.load_config(filename)
-            else:
+            if self.is_loaded(filename):
                 raise InvalidConfig('Duplicate blacklist %s' % (filename, ))
+            await self.load_config(filename)
         return True
 
     def __init__(self, next, *filenames):
