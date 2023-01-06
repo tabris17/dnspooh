@@ -48,11 +48,12 @@ class BlockMiddleware(Middleware):
         for _file in self.filenames:
             if isinstance(_file, list):
                 filename, refresh_interval = _file
-                self.server.create_scheduled_task(
-                    functools.partial(self.load_config, filename),
-                    timers.Timer(refresh_interval), 
-                    '[SCHEDULE] fetching blacklist %s' % (filename, )
-                )
+                if not self.is_loaded(filename):
+                    self.server.create_scheduled_task(
+                        functools.partial(self.load_config, filename),
+                        timers.Timer(refresh_interval), 
+                        '[SCHEDULE] fetching blacklist %s' % (filename, )
+                    )
             else:
                 filename = _file
             if self.is_loaded(filename):
