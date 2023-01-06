@@ -255,6 +255,12 @@ class Server:
         except ConnectionError as exc:
             logger.warning(exc)
 
+    async def fetch(self, url, **kwargs):
+        return await https.fetch(url, self.handle, 
+                                      self.pool, 
+                                      self.proxy,
+                                      **kwargs)
+
     def _get_timeout(self, upstream):
         return self.timeout if upstream.timeout is None else upstream.timeout
 

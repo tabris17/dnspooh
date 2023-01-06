@@ -296,7 +296,10 @@ DEFAULT_CONFIG = {
         'ttl': CACHE_TTL,
     },
     'hosts': [
-        'hosts'
+        'hosts',
+    ],
+    'block': [
+        'block.txt',
     ],
     'http': {
         'host': HTTP_HOST,

@@ -1,9 +1,10 @@
+import io
 import sys
+import asyncio
+import pathlib
 
-import dnslib
 
-
-__all__ = ('Middleware', 'CacheMiddleware', 'HostsMiddleware', 'RulesMiddleware')
+__all__ = ('Middleware', 'CacheMiddleware', 'HostsMiddleware', 'BlockMiddleware', 'RulesMiddleware')
 
 
 def _middleware_name_to_class_name(name):
@@ -23,6 +24,16 @@ def create_middleware(name, next, config):
     elif isinstance(config, dict):
         return middleware_class(next, **config)
     return middleware_class(next, config)
+
+
+async def load_config(filename, server, parser):
+    if filename.startswith(('http://', 'https://')):
+        response = await server.fetch(filename)
+        fp = io.StringIO(response.body.decode())
+    else:
+        fp = pathlib.Path(filename).open('r')
+    with fp:
+        return await asyncio.to_thread(parser, fp)
 
 
 class Middleware:
@@ -69,4 +80,5 @@ class Middleware:
 
 from .cache import CacheMiddleware
 from .hosts import HostsMiddleware
+from .block import BlockMiddleware
 from .rules import RulesMiddleware

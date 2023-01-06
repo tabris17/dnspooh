@@ -3,10 +3,24 @@
 hosts:
   - https://raw.hellogithub.com/hosts
 
+rule-actions:
+  - &run
+    action: command
+    run: asdsadsad
+
+  - action: IP
+    asd: asdsad
+
 rules:
- - DOMAIN-SUFFIX 
+ - [DOMAIN-SUFFIX, gov.cn, BLOCK]
+ - [DOMAIN-KEYWORD, taobao, *run]
+ - [DOMAIN-REGEX]
+ - [DOMAIN]
+ - [IP_CIDR]
+ - [GEOIP, CN]
 
 middlewares:
-  #- rules
+  - rules
   - cache
   - hosts
+  - block

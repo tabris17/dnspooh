@@ -5,109 +5,70 @@ import dnslib
 import io
 import functools
 
-import https
 import timers
 
-from . import Middleware
-from exceptions import InvalidConfig, HttpException
+from . import Middleware, load_config
+from exceptions import InvalidConfig
 
 
 logger = logging.getLogger(__name__)
 
 
-def _parse_file(fp, hosts):
-    def _parse_line(ln):
-        _addr, _hostname = ln.split(' ', 1)
-        addr = _addr.strip()
-        hostname = _hostname.strip()
-        if addr == '-':
-            return None, hostname
-        elif hostname.startswith('*'):
-            raise InvalidConfig('Invalid domain name %s' % (hostname, ))
-        try:
-            ip_addr = ipaddress.ip_address(addr)
-        except ValueError:
-            raise InvalidConfig('Invalid ip address %s' % (addr, ))
-        return ip_addr, hostname
+def _parse_config(fp):
+    hosts = dict()
+    line_no = 1
 
     for ln in fp:
         ln = ln.lstrip()
         if ln == '' or ln.startswith('#'):
             continue
-        ip_addr, hostname = _parse_line(ln)
-        if ip_addr is None:
-            hosts[hostname] = None
-        elif hostname not in hosts:
-            hosts[hostname] = [ip_addr]
-        elif hosts[hostname] is not None:
+        _addr, _hostname = ln.split(' ', 1)
+        addr = _addr.strip()
+        hostname = _hostname.strip()
+        try:
+            ip_addr = ipaddress.ip_address(addr)
+        except ValueError:
+            raise InvalidConfig('Invalid ip address %s in line %d' % (addr, line_no))
+        if hostname in hosts:
             hosts[hostname].append(ip_addr)
-
-
-def _response_nxdomain(request):
-    response = request.reply()
-    response.header.rcode = getattr(dnslib.RCODE, 'NXDOMAIN')
-    return response
+        else:
+            hosts[hostname] = [ip_addr]
+        line_no += 1
+    return hosts
 
 
 class HostsMiddleware(Middleware):
     DEFAULT_TTL = 60
 
-    def _load_hosts_file(self, filename, overwrite=False):
-        logger.debug('Loading hosts file (filename=%s; overwrite=%s)' % (filename, overwrite))
-        if filename in self.hosts and not overwrite:
-            raise InvalidConfig('Duplicate hosts file %s' % (filename, ))
-        self.hosts[filename] = hosts = dict()
+    async def load_config(self, filename):
         try:
-            with pathlib.Path(filename).open('r') as fp:
-                self.files.append(filename)
-                _parse_file(fp, hosts)
+            self.hosts[filename] = await load_config(filename, self.server, _parse_config)
         except Exception as exc:
-            logger.warning('Failed to load hosts file (filename=%s; overwrite=%s; exc=%s)' % (filename, overwrite, exc))
+            logger.warning('Failed to load hosts file %s: %s', filename, exc)
             return False
-        logger.debug('Succeeded to load hosts file (filename=%s; overwrite=%s)' % (filename, overwrite))
+        logger.info('Succeeded to load hosts file %s', filename)
         return True
 
-    async def _load_hosts_url(self, url, overwrite=False):
-        logger.debug('Loading hosts url (url=%s; overwrite=%s)' % (url, overwrite))
-        splited_url = url.split('|', 1)
-        if len(splited_url) > 1:
-            url, reload_interval = splited_url
-            self.server.create_scheduled_task(
-                functools.partial(self._load_hosts_url, url, True),
-                timers.Timer(reload_interval), 
-                '[SCHEDULE] fetching hosts (url=%s)' % (url, )
-            )
-        if url in self.hosts and not overwrite:
-            raise InvalidConfig('Duplicate hosts url %s' % (url, ))
-
-        try:
-            response = await https.fetch(url, 
-                                         self.server.handle, 
-                                         self.server.pool, 
-                                         self.server.proxy)
-        except HttpException as exc:
-            logger.warning('Failed to load hosts url (url=%s; overwrite=%s; exc=%s)' % (url, overwrite, exc))
-            return False
-        self.hosts[url] = hosts = dict()
-        self.urls.append(url)
-        try:
-            with io.StringIO(response.body.decode()) as fp:
-                _parse_file(fp, hosts)
-        except Exception as exc:
-            logger.warning('Failed to load hosts url (url=%s; overwrite=%s; exc=%s)' % (url, overwrite, exc))
-            return False
-        logger.debug('Succeeded to load hosts url (url=%s; overwrite=%s)' % (url, overwrite))
-        return True
+    def is_loaded(self, filename):
+        return filename in self.hosts
 
     async def bootstrap(self):
-        success =  await super().bootstrap()
-        if not success:
+        if not await super().bootstrap():
             return False
-        for filename in self.filenames:
-            if filename.startswith(('http://', 'https://')):
-                await self._load_hosts_url(filename)
+        for _file in self.filenames:
+            if isinstance(_file, list):
+                filename, refresh_interval = _file
+                self.server.create_scheduled_task(
+                    functools.partial(self.load_config, filename),
+                    timers.Timer(refresh_interval), 
+                    '[SCHEDULE] fetching hosts file %s' % (filename, )
+                )
             else:
-                self._load_hosts_file(filename)
+                filename = _file
+            if not self.is_loaded(filename):
+                await self.load_config(filename)
+            else:
+                raise InvalidConfig('Duplicate hosts file %s' % (filename, ))
         return True
 
     def __init__(self, next, *filenames):
@@ -123,16 +84,8 @@ class HostsMiddleware(Middleware):
         response = request.reply()
         for hosts in self.hosts.values():
             if hostname not in hosts:
-                rpos = hostname.rfind('.')
-                while rpos > 0:
-                    suffix_hostname = '*' + hostname[rpos:]
-                    if hosts.get(suffix_hostname, False) is None:
-                        return _response_nxdomain(request)
-                    rpos = hostname.rfind('.', 0, rpos)
                 continue
             ip_addrs = hosts[hostname]
-            if ip_addrs is None:
-                return _response_nxdomain(request)
             for r in ip_addrs:
                 if isinstance(r, ipaddress.IPv6Address) and qtype == dnslib.QTYPE.AAAA:
                     response.add_answer(dnslib.RR(
