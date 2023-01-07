@@ -1,5 +1,7 @@
 import logging
-#import 
+
+import dnslib
+import netaddr
 
 from . import Middleware
 from exceptions import InvalidConfig
@@ -38,7 +40,7 @@ class IpRangeRule(Rule):
 def parse_rule(*args):
     name = args[0].upper()
     if name == 'DOMAIN':
-        pass
+        return 
     elif name == 'DOMAIN-SUFFIX':
         pass
     elif name == 'DOMAIN-KEYWORD':
@@ -60,12 +62,26 @@ class BlockAction(Action):
     pass
 
 
+def parse_action(*args):
+    pass
+
+
 class RulesMiddleware(Middleware):
     def __init__(self, next, *rules):
         super().__init__(next)
         self.rules = rules
 
+    def _process_request(self, request):
+        return request
+
+    def _process_response(self, response):
+        with self.server.open_geoip() as geoip:
+            for answer in response.rr:
+                if answer.rtype == dnslib.QTYPE.A:
+                    logger.info(geoip.get('146.19.22.103'))
+        return response
 
     async def handle(self, request, **kwargs):
-        return await super().handle(request, **kwargs)
-        
+        request = self._process_request(request)
+        response = await super().handle(request, **kwargs)
+        return self._process_response(response)

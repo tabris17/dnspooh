@@ -12,47 +12,55 @@ DEFAULT_HTTPS_PORT = 443
 
 
 class UpstreamCollection:
-    def __init__(self, upstreams, only_secret):
-        if only_secret:
+    def __init__(self, upstreams, only_secure):
+        if only_secure:
             upstreams = list(filter(
                 lambda up: isinstance(up, (TlsUpstream, HttpsUpstream)), 
                 upstreams))
         self._upstreams = upstreams
-        self._default_group = []
         self._grouped = dict()
         for upstream in upstreams:
-            if upstream.group in self._grouped:
-                self._grouped[upstream.group].append(upstream)
-            else:
-                self._grouped[upstream.group] = [upstream]
+            for group in upstream.groups:
+                if group in self._grouped:
+                    self._grouped[group].append(upstream)
+                else:
+                    self._grouped[group] = [upstream]
         self._named = {upstream.name: upstream for upstream in upstreams}
-        self._sorted = upstreams.copy()
-        self._pinned = None
+        self._sorted = None
+        self._selected = None
         self.sort()
 
     def _cmp(self, up1, up2):
-        if up1.name == self._pinned: return 1
-        if up2.name == self._pinned: return -1
+        if up1.name == self._selected: return 1
+        if up2.name == self._selected: return -1
         return up1.priority - up2.priority
 
     def sort(self):
+        self._sorted = self.all()
         self._sorted.sort(reverse=True, key=functools.cmp_to_key(self._cmp))
-        for upstreams in self._grouped.values():
-            upstreams.sort(reverse=True, key=functools.cmp_to_key(self._cmp))
+        for group_name, group_upstreams in self._grouped.items():
+            group_upstreams = group_upstreams.copy()
+            group_upstreams.sort(reverse=True, key=functools.cmp_to_key(self._cmp))
+            self._grouped[group_name] = group_upstreams
         return self
 
     def all(self):
         return self._upstreams.copy()
 
     def group(self, name):
-        self._grouped.get(name, self._default_group).copy()
+        return self._grouped[name]
+
+    def has_group(self, name):
+        return name in self._grouped
 
     def sorted(self):
-        return self._sorted.copy()
+        if self._sorted is None:
+            self.sort()
+        return self._sorted
 
-    def pinned(self, name):
-        self._pinned = name
-        return self
+    def select(self, name):
+        self._selected = name
+        return self.sort()
 
     @property
     def primary(self):
@@ -61,10 +69,14 @@ class UpstreamCollection:
 
 class Upstream:
     def __init__(self, **kwargs):
-        self.name = kwargs.get('name', '')
+        self.name = kwargs.get('name')
+        if not isinstance(self.name, str) or self.name == '':
+            raise ValueError('Upstream name must be a string')
         self.proxy = kwargs.get('proxy')
         self.timeout = kwargs.get('timeout')
-        self.group = kwargs.get('group')
+        self.groups = kwargs.get('groups', [])
+        if not isinstance(self.groups, list):
+            raise ValueError('Upstream groups must be a list')
         self.priority = kwargs.get('priority', 0)
         self.success = 0
         self.usage = 0

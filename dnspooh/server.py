@@ -6,6 +6,8 @@ import functools
 import enum
 import time
 
+import maxminddb
+
 from dnslib import DNSRecord, DNSError, DNSHeader
 
 import https
@@ -87,11 +89,10 @@ class Server:
         self.port = self.config['port']
         self.timeout = self.config['timeout']
         self.upstreams = UpstreamCollection(self.config['upstreams'], 
-                                            self.config['secret'])
+                                            self.config['secure'])
         self.proxy = self.config['proxy']
         bootstrap_upstreams = []
         hostname_upstreams = []
-        grouped_upstreams = dict()
         named_upstreams = dict()
 
         for upstream in self.upstreams.all():
@@ -104,12 +105,6 @@ class Server:
                 if upstream.name in named_upstreams:
                     raise RuntimeError('Duplicated upstream name "%s"' % (upstream.name, ))
                 named_upstreams[upstream.name] = upstream
-
-            if upstream.group:
-                if upstream.group in grouped_upstreams:
-                    grouped_upstreams[upstream.group].append(upstream)
-                else:
-                    grouped_upstreams[upstream.group] = [upstream]
 
         async def resolve_upstream_hostname(hostname_upstream, bootstrap_upstreams):
             request = DNSRecord.question(hostname_upstream.hostname)
@@ -383,3 +378,6 @@ class Server:
             self.transport.close()
             self.status = self.Status.stopped
             logger.info('DNS serivce stopped')
+
+    def open_geoip(self):
+        return maxminddb.open_database(self.config['geoip'])
