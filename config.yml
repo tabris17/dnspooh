@@ -16,7 +16,7 @@ rules:
  - [DOMAIN-KEYWORD, taobao, *run]
  - [DOMAIN-REGEX]
  - [DOMAIN]
- - [IP_CIDR]
+ - [IP-CIDR]
  - [GEOIP, CN]
 
 middlewares:

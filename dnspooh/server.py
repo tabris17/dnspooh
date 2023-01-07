@@ -86,7 +86,8 @@ class Server:
         self.host = self.config['host']
         self.port = self.config['port']
         self.timeout = self.config['timeout']
-        self.upstreams = UpstreamCollection(self.config['upstreams'])
+        self.upstreams = UpstreamCollection(self.config['upstreams'], 
+                                            self.config['secret'])
         self.proxy = self.config['proxy']
         bootstrap_upstreams = []
         hostname_upstreams = []
@@ -144,6 +145,7 @@ class Server:
 
         await asyncio.gather(*[test_upstream(_) for _ in self.upstreams.all() if not _.disable])
         self.upstreams.sort()
+        logger.info('Primary DNS is %s', self.upstreams.primary.name)
 
     def create_task(self, coro, name=None, context=None):
         task = self.loop.create_task(coro, name=name, context=context)

@@ -12,7 +12,11 @@ DEFAULT_HTTPS_PORT = 443
 
 
 class UpstreamCollection:
-    def __init__(self, upstreams):
+    def __init__(self, upstreams, only_secret):
+        if only_secret:
+            upstreams = list(filter(
+                lambda up: isinstance(up, (TlsUpstream, HttpsUpstream)), 
+                upstreams))
         self._upstreams = upstreams
         self._default_group = []
         self._grouped = dict()
@@ -49,6 +53,10 @@ class UpstreamCollection:
     def pinned(self, name):
         self._pinned = name
         return self
+
+    @property
+    def primary(self):
+        return self._upstreams[0]
 
 
 class Upstream:

@@ -31,34 +31,6 @@ STATS_MAX_LEN = 1000
 
 BUILTIN_UPSTREAMS = [
     {
-        'name': 'google-1',
-        'type': 'dns',
-        'host': '8.8.8.8',
-        'port': DEFAULT_DNS_PORT,
-        'group': 'google',
-        'priority': 1,
-    },
-    {
-        'name': 'google-2',
-        'type': 'dns',
-        'host': '8.8.4.4',
-        'port': DEFAULT_DNS_PORT,
-        'group': 'google',
-    },
-    {
-        'name': 'google-tls',
-        'type': 'tls',
-        'host': '8.8.8.8',
-        'port': DEFAULT_DOT_PORT,
-        'group': 'google',
-    },
-    {
-        'name': 'google-https',
-        'type': 'https',
-        'url': 'https://dns.google/dns-query',
-        'group': 'google',
-    },
-    {
         'name': 'cloudflare-1',
         'type': 'dns',
         'host': '1.1.1.1',
@@ -92,12 +64,39 @@ BUILTIN_UPSTREAMS = [
         'host': '1.1.1.1',
         'port': DEFAULT_DOT_PORT,
         'group': 'cloudflare',
+        'priority': 1,
     },
     {
         'name': 'cloudflare-https',
         'type': 'https',
         'url': 'https://1.1.1.1/dns-query',
         'group': 'cloudflare',
+    },{
+        'name': 'google-1',
+        'type': 'dns',
+        'host': '8.8.8.8',
+        'port': DEFAULT_DNS_PORT,
+        'group': 'google',
+    },
+    {
+        'name': 'google-2',
+        'type': 'dns',
+        'host': '8.8.4.4',
+        'port': DEFAULT_DNS_PORT,
+        'group': 'google',
+    },
+    {
+        'name': 'google-tls',
+        'type': 'tls',
+        'host': '8.8.8.8',
+        'port': DEFAULT_DOT_PORT,
+        'group': 'google',
+    },
+    {
+        'name': 'google-https',
+        'type': 'https',
+        'url': 'https://dns.google/dns-query',
+        'group': 'google',
     },
     {
         'name': 'alidns-1',
@@ -282,6 +281,7 @@ BUILTIN_UPSTREAMS = [
 ]
 
 DEFAULT_CONFIG = {
+    'secret': True,
     'debug': False,
     'host': LISTEN_HOST,
     'port': DEFAULT_DNS_PORT,

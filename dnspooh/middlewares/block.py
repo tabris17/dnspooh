@@ -82,6 +82,6 @@ class BlockMiddleware(Middleware):
                 suffix_hostname = hostname[dot_pos + 1:]
                 if suffix_hostname in blacklist:
                     return _nxdomain(request)
-                dot_pos = hostname.find('.', dot_pos)                
+                dot_pos = hostname.find('.', dot_pos + 1)                
 
         return await super().handle(request, **kwargs)
