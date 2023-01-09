@@ -415,6 +415,7 @@ DEFAULT_CONFIG = {
         'port': HTTP_PORT,
         'timeout': HTTP_TIMEOUT,
         'static_files': 'web',
+        'disable': True,
     },
     'middlewares': [],
 }
