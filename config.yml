@@ -1,23 +1,18 @@
-#proxy: socks5://127.0.0.1:7890
+proxy: socks5://127.0.0.1:7890
 
 hosts:
   - https://raw.hellogithub.com/hosts
 
-rule-actions:
-  - &run
-    action: command
-    run: asdsadsad
-
-  - action: IP
-    asd: asdsad
+#rule-actions:
+#  - &run
+#    action: command
+#    run: asdsadsad
 
 rules:
- - [DOMAIN-SUFFIX, gov.cn, BLOCK]
- - [DOMAIN-KEYWORD, taobao, *run]
- - [DOMAIN-REGEX]
- - [DOMAIN]
- - [IP-CIDR]
- - [GEOIP, CN]
+  - [gov.cn, geoip: cn]
+  - [keyword: .cn, geoip: cn]
+  - [.cn, geoip: cn]
+  - [-, 127.0.0.1/8]
 
 middlewares:
   - rules
