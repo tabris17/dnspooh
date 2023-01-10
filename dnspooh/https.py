@@ -426,6 +426,8 @@ class Server:
 
     async def run(self):
         http_config = self.config['http']
+        if http_config.get('disable'):
+            return
         static_files = pathlib.Path(http_config['static_files'])
         if not static_files.is_dir():
             raise InvalidConfig('%s is not a directory' % (static_files, ))
