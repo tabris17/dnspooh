@@ -63,9 +63,9 @@ class RuleIfParser:
             if self.domain_required:
                 domain = context['domain']
             if self.ip_required:
-                ip = context['ip']
+                ips = context['ips']
             if self.geoip_required:
-                geoip = context['geoip']
+                geoips = context['geoips']
             def _test(ast):
                 opcode = ast[0]
                 if opcode == OpCode.AND:
@@ -92,18 +92,30 @@ class RuleIfParser:
                     return not domain.endswith(ast[1].lower())
                 elif opcode == OpCode.DOMAIN_MATCH:
                     return re.fullmatch(ast[1], domain) is not None
-                elif opcode == OpCode.IP_IN:
-                    return ip in ast[1]
-                elif opcode == OpCode.IP_NOT_IN:
-                    return ip not in ast[1]
-                elif opcode == OpCode.IP_EQ:
-                    return ip == ast[1]
-                elif opcode == OpCode.IP_NOT_EQ:
-                    return ip != ast[1]
-                elif opcode == OpCode.GEOIP_EQ:
-                    return geoip == ast[1]
-                elif opcode == OpCode.GEOIP_NOT_EQ:
-                    return geoip != ast[1]
+                elif opcode == OpCode.ALL_IP_IN:
+                    return all(map(lambda ip: ip in ast[1], ips))
+                elif opcode == OpCode.ALL_IP_NOT_IN:
+                    return all(map(lambda ip: ip not in ast[1], ips))
+                elif opcode == OpCode.ALL_IP_EQ:
+                    return all(map(lambda ip: ip == ast[1], ips))
+                elif opcode == OpCode.ALL_IP_NOT_EQ:
+                    return all(map(lambda ip: ip != ast[1], ips))
+                elif opcode == OpCode.ALL_GEOIP_EQ:
+                    return all(map(lambda geoip: geoip == ast[1], geoips))
+                elif opcode == OpCode.ALL_GEOIP_NOT_EQ:
+                    return all(map(lambda geoip: geoip != ast[1], geoips))
+                elif opcode == OpCode.ANY_IP_IN:
+                    return any(map(lambda ip: ip in ast[1], ips))
+                elif opcode == OpCode.ANY_IP_NOT_IN:
+                    return any(map(lambda ip: ip not in ast[1], ips))
+                elif opcode == OpCode.ANY_IP_EQ:
+                    return any(map(lambda ip: ip == ast[1], ips))
+                elif opcode == OpCode.ANY_IP_NOT_EQ:
+                    return any(map(lambda ip: ip != ast[1], ips))
+                elif opcode == OpCode.ANY_GEOIP_EQ:
+                    return any(map(lambda geoip: geoip == ast[1], geoips))
+                elif opcode == OpCode.ANY_GEOIP_NOT_EQ:
+                    return any(map(lambda geoip: geoip != ast[1], geoips))
                 return False
             return _test(self.ast)
 
