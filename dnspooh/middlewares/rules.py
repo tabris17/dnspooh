@@ -184,24 +184,42 @@ class RuleIfParser:
             .set_name('ip cidr')\
             .set_parse_action(lambda tokens: netaddr.IPNetwork(tokens[0]))
         country_code_literal = pyparsing.Word(pyparsing.alphas, exact=2)
-        expr_ip_in = ('ip in' + ip_cidr_literal)\
-            .set_name('ip in cidr expression')\
-            .set_parse_action(lambda tokens: _ip_op(self.OpCode.IP_IN, tokens[1]))
-        expr_ip_not_in = ('ip not in' + ip_cidr_literal)\
-            .set_name('ip not in cidr expression')\
-            .set_parse_action(lambda tokens: _ip_op(self.OpCode.IP_NOT_IN, tokens[1]))
-        expr_ip_equal = ('ip is' + ip_literal)\
-            .set_name('ip equal expression')\
-            .set_parse_action(lambda tokens: _ip_op(self.OpCode.IP_EQ, tokens[1]))
-        expr_ip_not_equal = ('ip is not' + ip_literal)\
-            .set_name('ip not equal expression')\
-            .set_parse_action(lambda tokens: _ip_op(self.OpCode.IP_NOT_EQ, tokens[1]))
-        expr_geoip_equal = ('geoip is' + country_code_literal)\
-            .set_name('geoip equal expression')\
-            .set_parse_action(lambda tokens: _geoip_op(self.OpCode.GEOIP_EQ, tokens[1]))
-        expr_geoip_not_equal = ('geoip is not' + country_code_literal)\
-            .set_name('geoip not equal expression')\
-            .set_parse_action(lambda tokens: _geoip_op(self.OpCode.GEOIP_NOT_EQ, tokens[1]))
+        expr_all_ip_in = ('all ip in' + ip_cidr_literal)\
+            .set_name('all ip in cidr expression')\
+            .set_parse_action(lambda tokens: _ip_op(self.OpCode.ALL_IP_IN, tokens[1]))
+        expr_all_ip_not_in = ('all ip not in' + ip_cidr_literal)\
+            .set_name('all ip not in cidr expression')\
+            .set_parse_action(lambda tokens: _ip_op(self.OpCode.ALL_IP_NOT_IN, tokens[1]))
+        expr_all_ip_equal = ('all ip is' + ip_literal)\
+            .set_name('all ip equal expression')\
+            .set_parse_action(lambda tokens: _ip_op(self.OpCode.ALL_IP_EQ, tokens[1]))
+        expr_all_ip_not_equal = ('all ip is not' + ip_literal)\
+            .set_name('all ip not equal expression')\
+            .set_parse_action(lambda tokens: _ip_op(self.OpCode.ALL_IP_NOT_EQ, tokens[1]))
+        expr_all_geoip_equal = ('all geoip is' + country_code_literal)\
+            .set_name('all geoip equal expression')\
+            .set_parse_action(lambda tokens: _geoip_op(self.OpCode.ALL_GEOIP_EQ, tokens[1]))
+        expr_all_geoip_not_equal = ('all geoip is not' + country_code_literal)\
+            .set_name('all geoip not equal expression')\
+            .set_parse_action(lambda tokens: _geoip_op(self.OpCode.ALL_GEOIP_NOT_EQ, tokens[1]))
+        expr_any_ip_in = ('any ip in' + ip_cidr_literal)\
+            .set_name('any ip in cidr expression')\
+            .set_parse_action(lambda tokens: _ip_op(self.OpCode.ANY_IP_IN, tokens[1]))
+        expr_any_ip_not_in = ('any ip not in' + ip_cidr_literal)\
+            .set_name('any ip not in cidr expression')\
+            .set_parse_action(lambda tokens: _ip_op(self.OpCode.ANY_IP_NOT_IN, tokens[1]))
+        expr_any_ip_equal = ('any ip is' + ip_literal)\
+            .set_name('any ip equal expression')\
+            .set_parse_action(lambda tokens: _ip_op(self.OpCode.ANY_IP_EQ, tokens[1]))
+        expr_any_ip_not_equal = ('any ip is not' + ip_literal)\
+            .set_name('any ip not equal expression')\
+            .set_parse_action(lambda tokens: _ip_op(self.OpCode.ANY_IP_NOT_EQ, tokens[1]))
+        expr_any_geoip_equal = ('any geoip is' + country_code_literal)\
+            .set_name('any geoip equal expression')\
+            .set_parse_action(lambda tokens: _geoip_op(self.OpCode.ANY_GEOIP_EQ, tokens[1]))
+        expr_any_geoip_not_equal = ('any geoip is not' + country_code_literal)\
+            .set_name('any geoip not equal expression')\
+            .set_parse_action(lambda tokens: _geoip_op(self.OpCode.ANY_GEOIP_NOT_EQ, tokens[1]))
         expr_simple = (
             expr_domain_not_contains |
             expr_domain_contains |
@@ -212,12 +230,18 @@ class RuleIfParser:
             expr_domain_ends_with |
             expr_domain_ends_without |
             expr_domain_match |
-            expr_ip_in |
-            expr_ip_not_in |
-            expr_ip_equal |
-            expr_ip_not_equal |
-            expr_geoip_equal |
-            expr_geoip_not_equal
+            expr_all_ip_in |
+            expr_all_ip_not_in |
+            expr_all_ip_equal |
+            expr_all_ip_not_equal |
+            expr_all_geoip_equal |
+            expr_all_geoip_not_equal |
+            expr_any_ip_in |
+            expr_any_ip_not_in |
+            expr_any_ip_equal |
+            expr_any_ip_not_equal |
+            expr_any_geoip_equal |
+            expr_any_geoip_not_equal
         )
         expr <<= pyparsing.infix_notation(expr_simple, [
             ('not', 1, pyparsing.opAssoc.RIGHT, lambda tokens: (self.OpCode.NOT, tokens[0][1])),
