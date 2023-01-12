@@ -311,23 +311,28 @@ class RulesMiddleware(Middleware):
         except pyparsing.exceptions.ParseException as exc:
             raise InvalidConfig('Invalid rules config: %s' % (exc, ))
 
+    def _geoip(self, ip):
+        with self.server.open_geoip() as reader:
+            result = reader.get(ip_str)                            
+        return result['country']['iso_code'] if result else None
+
     async def handle(self, request, **kwargs):
+        domain = request.q.qname.idna().rstrip('.')
         for if_expr, then_stm in self.rules.get('pre', []):
-            domain=request.q.qname.idna().rstrip('.')
             if if_expr.test(domain=domain):
                 then_stm.exec()
                 break
         response = await super().handle(request, **kwargs)
+        ips = map(
+            lambda r: str(r.rdata),
+            filter(
+                lambda r: r.rtype in (dnslib.QTYPE.AAAA, dnslib.QTYPE.A), 
+                response.rr
+            )
+        )
+        geoips = map(self._geoip, ips)
         for if_expr, then_stm in self.rules.get('post', []):
-            for record in response.rr:
-                if record.rtype in (dnslib.QTYPE.AAAA, dnslib.QTYPE.A):
-                    ip_str = str(record.rdata)
-                    context = {'ip': ipaddress.ip_address(ip_str)}
-                    if if_expr.geoip_required:
-                        with self.server.open_geoip() as geoip:
-                            result = geoip.get(ip_str)                            
-                        context['geoip'] = result['country']['iso_code'] if result else None
-                    if if_expr.test(**context):
-                        then_stm.exec()
-                        break
+            if if_expr.test(domain=domain, ips=ips, geoips=geoips):
+                then_stm.exec()
+                break
         return response
