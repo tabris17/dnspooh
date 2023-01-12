@@ -6,6 +6,7 @@ hosts:
 rules:
   - if: xyz in domain
     then: pass
+    after: pass
 
   - if: domain ends with .cn
     then: pass
