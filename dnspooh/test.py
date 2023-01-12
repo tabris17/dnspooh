@@ -60,22 +60,27 @@ async def fetch_url():
     response = await https.fetch('https://raw.hellogithub.com/hosts', resolver, Pool())
     print(response)
 
-def parsing():
+def parsing_if():
     from middlewares.rules import RuleIfParser
-    import ipaddress
 
     parser = RuleIfParser()
 
     result = parser.parse('not not .com in domain or domain starts with 123.com or domain is not xyz.com')
     print(result.test(domain='xyz.com'), '<-', result)
-    result = parser.parse('(ip is ff00:123:123:123:123:123:123:123) and (ip in 127.0.0.1/8) and (ip is ff00::123:123) and (ip is ff00::123:192.168.0.1)')
-    print(result.test(ip=ipaddress.ip_address('129.168.253.1'), geoip='cn'), '<-', result)
-    result = parser.parse('ip is 127.0.0.1 and ip is 192.168.1.1')
-    print(result.test(ip=ipaddress.ip_address('129.168.253.1'), geoip='cn'), '<-', result)
-    result = parser.parse('ip is 127.0.0.1 and ip is 192.168.1.1')
-    print(result.test(ip=ipaddress.ip_address('129.168.253.1'), geoip='cn'), '<-', result)
     result = parser.parse('domain match /asdsad\d+/')
     print(result.test(domain='asdsad123'), '<-', result)
+
+def parsing_then():
+    from middlewares.rules import RuleThenParser
+    parser = RuleThenParser()
+    result = parser.parse('block')
+    print(result)
+    result = parser.parse('remove record if ip is 192.168.1.1, replace record by 127.0.0.1 if ip in 127.0.0.1/8, replace record by 127.0.0.1 if ip in 127.0.0.1/8')
+    print(result)
+    result = parser.parse('set upstream name to alidns-1, set upstream group to alidns, replace domain by xyz.com')
+    print(result)
+    result = parser.parse('return 127.0.0.1')
+    print(result)
 
 if __name__ == '__main__':
     logging.basicConfig(
@@ -83,5 +88,5 @@ if __name__ == '__main__':
         format="%(asctime)s [%(levelname)s] %(message)s",
         handlers=[logging.StreamHandler()]
     )
-    parsing()
+    parsing_then()
     #asyncio.run(fetch_url())

@@ -3,13 +3,6 @@ proxy: socks5://127.0.0.1:7890
 hosts:
   - https://raw.hellogithub.com/hosts
 
-#rule-actions:
-#  - &run
-#    action: command
-#    run: asdsadsad
-
-
-
 rules:
   - if: xyz in domain
     then: pass
