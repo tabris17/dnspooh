@@ -261,7 +261,7 @@ expr2 类型的表达式支持的判断条件有：
 - 如果 DNS 解析请求中包含多条查询，会被逐条拆分后发送至上游服务器，并在返回响应时重新组合。这么做的目的是为了方便中间件处理；
 - 程序启动时会测试配置中所有的上游服务器，并将响应最快的服务器设置为主服务器；
 - 程序内置的 GeoIP2 数据库仅包含中国 IP 段数据，只能返回 `cn` 或空。要使用完整的 GeoIP2 数据库，可以在配置文件中指定数据库文件；
-- 程序内置的上游 DNS 解析服务器包括：[Cloudflare DNS](https://1.1.1.1/dns/), [Google Public DNS](https://developers.google.com/speed/public-dns), [阿里公共DNS](https://alidns.com/), [114DNS](https://www.114dns.com/), [OneDNS](https://www.onedns.net/), [DNSPod](https://www.dnspod.cn/), [百度DNS](https://dudns.baidu.com/), [OpenDNS](https://www.opendns.com/), [AdGuard DNS](https://adguard-dns.io/) 。
+- 程序内置的上游 DNS 解析服务器包括：[Cloudflare DNS](https://1.1.1.1/dns/)(cloudflare), [Google Public DNS](https://developers.google.com/speed/public-dns)(google), [阿里公共DNS](https://alidns.com/)(alidns), [114DNS](https://www.114dns.com/)(114dns), [OneDNS](https://www.onedns.net/)(onedns), [DNSPod](https://www.dnspod.cn/)(dnspod), [百度DNS](https://dudns.baidu.com/)(baidu), [OpenDNS](https://www.opendns.com/)(opendns), [AdGuard DNS](https://adguard-dns.io/)(adguard) 。这些服务器按照（括号内）服务供应商的名称分为不同小组；又根据服务器所在地，分为 cn (中国)组和 global (全球)组。
 
 ## 5. 常用命令
 
