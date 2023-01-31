@@ -1,6 +1,6 @@
 # Dnspooh
 
-Dnspooh 是一个轻量级 DNS 中继和代理服务器，可以为本机或本地网络提供安全的 DNS 解析服务，并可以通过配置文件，屏蔽指定的域名和解析结果。
+Dnspooh 是一个轻量级 DNS 中继和代理服务器，可以为本机或本地网络提供安全的 DNS 解析服务，支持代理服务器、 hosts 文件、域名和 IP 黑名单，以及自定义规则。
 
 ## 1. 安装和运行
 
@@ -67,7 +67,7 @@ options:
   --help                show this help message and exit
 ```
 
-可以通过命令行参数和配置文件来对程序进行设置。**通过命令行参数传递的设置优先级高于配置文件中对应的设置。**如果没有指定配置文件，程序启动后会尝试加载当前目录下的 `config.yml` 配置文件。如果配置文件不存在，则使用默认配置。通过命令行参数 `-d` 可以查看当前的配置：
+可以通过命令行参数和配置文件来对程序进行设置。通过命令行参数传递的设置优先级高于配置文件中对应的设置。如果没有指定配置文件，程序启动后会尝试加载当前目录下的 `config.yml` 配置文件。如果配置文件不存在，则使用默认配置。通过命令行参数 `-d` 可以查看当前的配置：
 
 ```shell
 dnspooh -c config.yml -d
@@ -95,14 +95,14 @@ middlewares:
   - cache
 ```
 
-配置文件支持 `!path` 和 `!include` 两个扩展指令。当配置项目是一个文件名时，使用 `!path` 指令表示以当前配置文件所在路径作为文件的起始位置，如果不使用 `!path` 指令，则以程序当前路径作为文件起始位置。 `!include` 指令用来引用外部 yaml 配置文件，该配置文件所在路径作为外部配置文件的起始位置。
+配置文件支持 `!path` 和 `!include` 两个扩展指令。当配置项目是一个文件名时，使用 `!path` 指令表示以当前配置文件所在路径作为文件相对路径的起始位置，如果不使用 `!path` 指令，则以程序当前路径作为文件相对路径的起始位置。 `!include` 指令用来引用外部 yaml 配置文件，该配置文件所在路径作为外部配置文件的起始位置。
 
 | 配置名         | 数据类型 | 默认      | 描述                                                         |
 | -------------- | -------- | --------- | ------------------------------------------------------------ |
 | debug          | Boolean  | false     | 控制台/终端是否输出调试信息                                  |
 | host           | String   | "0.0.0.0" | 服务绑定本机地址                                             |
 | port           | Integer  | 53        | 服务绑定本机端口                                             |
-| geoip          | String   |           | GeoIP2 地理数据库。默认使用 [GeoIP2-CN](https://github.com/Hackl0us/GeoIP2-CN) |
+| geoip          | String   |           | GeoIP2 数据库文件路径。默认使用 [GeoIP2-CN](https://github.com/Hackl0us/GeoIP2-CN) |
 | secure         | Boolean  | true      | 仅使用安全（DoH/DoT）的上游 DNS 服务器                       |
 | timeout        | Float    | 5.0       | 上游 DNS 服务器响应超时时间（单位：秒）                      |
 | proxy          | String   |           | 代理服务器，支持 HTTP 和 SOCKS5 代理                         |
@@ -110,7 +110,7 @@ middlewares:
 | rules          | Array    |           | 自定义规则列表                                               |
 | hosts          | Array    |           | hosts 文件列表。支持 http/https 链接                         |
 | block          | Array    |           | 黑名单文件列表。支持 http/https 链接                         |
-| cache          | Object   |           | 缓存配置                                                     |
+| cache          |          |           | 缓存配置                                                     |
 | cache.max_size | Integer  | 4096      | 最大缓存条目数                                               |
 | cache.ttl      | Integer  | 86400     | 缓存有效期（单位：秒）                                       |
 
