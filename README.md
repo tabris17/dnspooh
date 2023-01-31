@@ -1,30 +1,174 @@
 # Dnspooh
 
-## 自定义规则
+Dnspooh 是一个轻量级 DNS 中继和代理服务器，可以为本机或本地网络提供安全的 DNS 解析服务，并可以通过配置文件，屏蔽指定的域名和解析结果。
 
-规则分为： if/then 规则、 if/before 、if/after 和 if/before/after 规则。前者用于直接返回 DNS 结果，而无需请求上游服务器，通常用于屏蔽或自定义域名解析；后者可以指定上游服务器，以及处理上游服务器的返回结果。
+## 1. 安装和运行
 
-每种规则都可以设置 end 块来表示命中该规则是否继续下一条规则判断， end 块的值是布尔类型。
+Dnspooh 使用 Python 语言编写，运行 Dnspooh 需要 Python 3.11 及以上版本。程序能以 Python 模块的方式运行，也能以源代码的方式直接运行。此外，项目还提供了打包后的 Windows 可执行文件。
 
-### if/then 规则
+### 1.1 Python 模块
 
-在所有类型的规则中， if/then 规则只能命中一次，后续的 if/then 规则都将会被跳过。then 块用来直接返回 DNS 请求结果，而不再将请求转给上游服务器。
+通过 pip 安装模块：
 
-### if/before 规则
+```shell
+pip install dnspooh
+```
 
-before 块用于指定上游服务器，或者替换请求中的域名。
+运行 Dnspooh ：
 
-### if/after 规则
+```shell
+dnspooh --help
+```
 
-after 块用于过滤响应的解析结果。
+或者：
 
-### if/before/after 规则
+```shell
+python -m dnspooh --help
+```
 
-结合了 if/before 规则和 if/after 规则。
+### 1.2 源代码
 
-### 规则块
+```shell
+git clone https://githu.com/tabris17/dnspooh
+cd dnspooh
+pip install -r requirements.txt
+```
 
-#### if
+运行 Dnspooh ：
+
+```shell
+python main.py --help
+```
+
+### 1.3 可执行文件
+
+将[下载](https://github.com/tabris17/dnspooh/releases)的 `dnspooh-vX.Y.Z-win-amd64.zip` （其中 X.Y.Z 是版本号）文件解压缩保存在本地，运行其中的 `dnspooh.exe` 可执行文件。
+
+## 2. 使用方法
+
+通过命令行的 `--help` 参数可以查看 Dnspooh 支持的命令行参数：
+
+```text
+usage: DNSPooh [-c file] [-u servers [servers ...]] [-t ms] [-h host] [-p port] [-D] [-d] [-v] [--help]
+
+A MitM DNS Proxy
+
+options:
+  -c file, --config file
+                        config file path (example "config.yml")
+  -u servers [servers ...], --upstream servers [servers ...]
+                        space-separated upstream DNS servers list
+  -t ms, --timeout ms   milliseconds for upstream DNS response timeout (default 5 ms)
+  -h host, --host host  local DNS proxy server listening host (default "0.0.0.0")
+  -p port, --port port  local DNS proxy server listening port (default "53")
+  -D, --debug           display debug message
+  -d, --dump            dump pretty config data
+  -v, --version         show program's version number and exit
+  --help                show this help message and exit
+```
+
+可以通过命令行参数和配置文件来对程序进行设置。**通过命令行参数传递的设置优先级高于配置文件中对应的设置。**如果没有指定配置文件，程序启动后会尝试加载当前目录下的 `config.yml` 配置文件。如果配置文件不存在，则使用默认配置。通过命令行参数 `-d` 可以查看当前的配置：
+
+```shell
+dnspooh -c config.yml -d
+```
+
+一个常规的配置文件如下：
+
+```yaml
+proxy: http://127.0.0.1:8080
+
+hosts:
+  - !path hosts
+  - https://raw.hellogithub.com/hosts
+
+block:
+  - !path block.txt
+
+rules:
+  - !include cn-domain.yml
+
+middlewares:
+  - rules
+  - hosts
+  - block
+  - cache
+```
+
+配置文件支持 `!path` 和 `!include` 两个扩展指令。当配置项目是一个文件名时，使用 `!path` 指令表示以当前配置文件所在路径作为文件的起始位置，如果不使用 `!path` 指令，则以程序当前路径作为文件起始位置。 `!include` 指令用来引用外部 yaml 配置文件，该配置文件所在路径作为外部配置文件的起始位置。
+
+| 配置名         | 数据类型 | 默认      | 描述                                                         |
+| -------------- | -------- | --------- | ------------------------------------------------------------ |
+| debug          | Boolean  | false     | 控制台/终端是否输出调试信息                                  |
+| host           | String   | "0.0.0.0" | 服务绑定本机地址                                             |
+| port           | Integer  | 53        | 服务绑定本机端口                                             |
+| geoip          | String   |           | GeoIP2 地理数据库。默认使用 [GeoIP2-CN](https://github.com/Hackl0us/GeoIP2-CN) |
+| secure         | Boolean  | true      | 仅使用安全（DoH/DoT）的上游 DNS 服务器                       |
+| timeout        | Float    | 5.0       | 上游 DNS 服务器响应超时时间（单位：秒）                      |
+| proxy          | String   |           | 代理服务器，支持 HTTP 和 SOCKS5 代理                         |
+| middlewares    | Array    | ["cache"] | 启用的中间件。列表定义顺序决定加载顺序                       |
+| rules          | Array    |           | 自定义规则列表                                               |
+| hosts          | Array    |           | hosts 文件列表。支持 http/https 链接                         |
+| block          | Array    |           | 黑名单文件列表。支持 http/https 链接                         |
+| cache          | Object   |           | 缓存配置                                                     |
+| cache.max_size | Integer  | 4096      | 最大缓存条目数                                               |
+| cache.ttl      | Integer  | 86400     | 缓存有效期（单位：秒）                                       |
+
+Dnspooh 提供下列中间件：
+
+1. Rules 自定义规则
+
+2. Hosts 自定义域名解析
+
+3. Block 域名和 IP 地址黑名单
+
+4. Cache 缓存上游服务器的解析结果
+
+这些中间件可以在配置文件中开启。在默认配置下，仅启用 Cache 中间件。中间件采用装饰器模式，先加载的中间件处于封装内层，后加载的中间件处于外层。建议按照本文档中的列表顺序定义。
+
+其中 `block` 和 `hosts` 的配置是一组文件列表。文件可以是本地文件，也可以是 http/https 链接。且当文件是链接时，还能设置更新频率：
+
+```yaml
+hosts:
+  - [https://raw.hellogithub.com/hosts, 3600]
+```
+
+上面的配置表示，程序每隔 3600 秒重新载入一次 https://raw.hellogithub.com/hosts 的数据。
+
+## 3. 自定义规则
+
+通过自定义规则中间件，可以实现按条件屏蔽域名、自定义解析结果等操作。可以在配置文件的 `rules` 单元中设置一组或多组规则，每组规则由 `if` 、 `then` 、 `before` 、 `after` 、 `end` 字段组合而成。根据不同的需求，一组规则可以是由 `if/then/end` 字段组成；或者是由 `if/before/after/end` 字段组成。其中 `end` 字段是可选的，表示命中并处理完此条规则后是否停止处理后续规则，默认值为 `false` ； `if` 字段是一个表达式，当表达式结果为真时，则表示命中这条规则； `then` 字段是一条语句，可以在这里直接拦截 DNS 解析请求，返回 NXDOMAIN （域名不存在）或自定义解析结果； `before` 字段是一组逗号分隔的命令语句，在 DNS 解析请求被转发到上游服务器之前被处理，可以用于指定上游服务器以及替换请求中的域名； `after` 字段也是一组逗号分隔的命令语句，在 DNS 解析结果从上游服务器返回之后被处理，可以根据返回的结果进行修改操作或执行外部命令。
+
+配置例子：
+
+```yaml
+rules:
+  - if: (lianmeng, adwords, adservice) in domian
+    then: block
+    end: true
+
+  - if: domain ends with (.cn, .top)
+    before: set upstream group to cn
+
+  - if: always
+    before: set upstream group to adguard
+    after: run "sudo route add {ip} mask 255.255.255.255 192.168.1.1" where geoip is cn
+```
+
+上面的配置作用是：
+
+1. 屏蔽含有 lianmeng 、 adwords 、 adservice 关键字的域名；
+2. 让 .cn 和 .top 域名使用国内的 DNS 服务器解析；
+3. 默认使用 adguard 作为上游域名解析服务器。adguard 服务器可以屏蔽所有广告域名；
+4. 当返回的解析结果中包含国内 IP 时，将此 IP 加入本机路由表，使用 192.168.1.1 网关路由（当开启全局 VPN 时，使用本地网络访问国内 IP ）。
+
+所有的表达式都支持 `not` 、 `and` 和 `or` 逻辑运算，按优先级排列如下：
+
+1. not *expr*
+2. *expr* and *expr*
+3. *expr* or *expr*
+
+### if 表达式
 
 if 由一个或多个判断条件组成的逻辑运算表达式。支持的判断条件有：
 
@@ -45,26 +189,21 @@ if 由一个或多个判断条件组成的逻辑运算表达式。支持的判�
 - domain ends without *suffix*
 - domain ends without (*suffix1*, *suffix2*, ...)
 - domain match /*regex*/
+- always
 
-支持的逻辑运算按优先级排列如下：
-
-- not *expr*
-- *expr* and *expr*
-- *expr* or *expr*
-
-#### then
+### then 语句
 
 - block
 - return *ip*
 - return (*ip1*, *ip2*, ...)
 
-#### before
+### before 语句
 
 - set upstream group to *name*
 - set upstream name to *name*
 - replace domain by *domain*
 
-#### after
+### after 语句
 
 - block if *expr1*
 - return *ip* if *expr1*
@@ -77,7 +216,7 @@ if 由一个或多个判断条件组成的逻辑运算表达式。支持的判�
 - replace record by *ip* where *expr2*
 - run *command* where *expr2*
 
-expr1 支持的判断条件有：
+expr1 类型的表达式支持的判断条件有：
 
 - any ip is *ip*
 - any ip is (*ip1*, *ip2*, ...)
@@ -100,7 +239,7 @@ expr1 支持的判断条件有：
 - all geoip is *country*
 - all geoip is not *country*
 
-expr2 支持的判断条件有：
+expr2 类型的表达式支持的判断条件有：
 
 - ip is *ip*
 - ip is (*ip1*, *ip2*, ....)
@@ -114,3 +253,33 @@ expr2 支持的判断条件有：
 - geoip is not *country*
 - first
 - last
+
+## 4. 特性
+
+- 如果 DNS 解析请求中包含多条查询，会被逐条拆分后发送至上游服务器，并在返回响应时重新组合。这么做的目的是为了方便中间件处理；
+- 程序启动时会测试配置中所有的上游服务器，并将响应最快的服务器设置为主服务器；
+- 程序内置的 GeoIP2 数据库仅包含中国 IP 段数据，只能返回 `cn` 或空。要使用完整的 GeoIP2 数据库，可以在配置文件中指定数据库文件；
+- 程序内置的上游 DNS 解析服务器包括：[Cloudflare DNS](https://1.1.1.1/dns/), [Google Public DNS](https://developers.google.com/speed/public-dns), [阿里公共DNS](https://alidns.com/), [114DNS](https://www.114dns.com/), [OneDNS](https://www.onedns.net/), [DNSPod](https://www.dnspod.cn/), [百度DNS](https://dudns.baidu.com/), [OpenDNS](https://www.opendns.com/), [AdGuard DNS](https://adguard-dns.io/) 。
+
+## 5. 常用命令
+
+模块构建打包（需要安装 build 模块）：
+
+```shell
+pip install build
+python -m build
+```
+
+可执行程序构建打包（需要安装 cx_Freeze 模块）：
+
+```shell
+pip install cx_freeze
+python bundle.py build
+```
+
+运行单元测试：
+
+```shell
+python -m unittest tests
+```
+
