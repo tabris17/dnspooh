@@ -8,17 +8,7 @@ block:
   - !path block.txt
 
 rules:
-  - if: domain is XYZ.com
-    then: block
-    end: true
-
-  - if: domain is www.baidu.com
-    before: replace domain by www.csdn.net
-
-  - !include chinese.yml
-
-  - if: always
-    after: run "sudo route add {ip} mask 255.255.255.255 192.168.1.1" where geoip is cn 
+  - !include cn-domain.yml
 
 middlewares:
   - rules
