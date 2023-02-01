@@ -485,11 +485,12 @@ def _load_from_args(args):
 
     if args.upstreams is not None:
         conf['upstreams'] = args.upstreams
+        conf['secure'] = False
 
     return conf
 
 
-def _merge_dict_recursive(original, addition):
+def _merge_dict_recursive(original, addition, reserved = []):
     def _unique(l):
         unique_l = list()
         for _ in l:
@@ -497,14 +498,20 @@ def _merge_dict_recursive(original, addition):
                 unique_l.append(_)
         return unique_l
 
+    def _reserved(k):
+        prefix = k + '.'
+        return [_[len(prefix):] for _ in reserved if _.startswith(prefix)]
+
     for k, v in addition.items():
         if k not in original:
             if v is not None:
                 original[k] = v
+        elif k in reserved:
+            continue
         else:
             orig_v = original[k]
             if isinstance(orig_v, dict) and isinstance(v, dict):
-                _merge_dict_recursive(orig_v, v)
+                _merge_dict_recursive(orig_v, v, _reserved(k))
             elif isinstance(orig_v, list) and isinstance(v, list):
                 original[k] = _unique(orig_v + v)
 
@@ -557,12 +564,12 @@ class Config:
                conf = _merge_dict_recursive(conf, _load_from_file(config_file))
                logger.info('Default config file "%s" loaded', config_file.absolute())
 
-        conf = _merge_dict_recursive(conf, DEFAULT_CONFIG)
+        conf = _merge_dict_recursive(conf, DEFAULT_CONFIG, ['upstreams'])
 
         try:
             conf['proxy'] = parse_proxy(conf.get('proxy'))
             conf['upstreams'] = [parse_upstream(_) for _ in conf['upstreams'] \
-                                    if not _.get('disable', False)]
+                                    if not isinstance(_, dict) or not _.get('disable', False)]
         except ValueError as e:
             raise InvalidConfig(e)
 

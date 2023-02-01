@@ -62,7 +62,10 @@ async def startup():
     except asyncio.CancelledError:
         logger.info('Exit')
     except Exception as exc:
-        logger.error(exc)
+        if debug:
+            raise
+        else:
+            logger.error('Unexpected error: %s', exc)
 
 
 def main():
