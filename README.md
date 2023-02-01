@@ -232,6 +232,8 @@ then 字段可以是下列任意语句之一：
 
 ### 3.3 before 语句
 
+before 字段由下列一条或多条逗号分隔的语句组成：
+
 - set upstream group to *name*  
   使用 *name* 组中的上游服务器来解析域名
 - set upstream name to *name*  
