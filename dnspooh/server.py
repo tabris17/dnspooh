@@ -20,6 +20,7 @@ from .scheme import Scheme
 from .exceptions import *
 from .stats import Stats
 from .upstream import UpstreamCollection
+from .proxy import parse_proxy
 
 
 logger = logging.getLogger(__name__)
@@ -169,9 +170,12 @@ class Server:
     def remove_task(self, task):
         self.tasks.remove(task)
 
-    def _get_proxy(self, upstream):
-        return self.proxy if upstream.proxy is None \
-            else upstream.proxy
+    def _get_proxy(self, upstream, **kwargs):
+        if 'proxy' in kwargs:
+            return parse_proxy(kwargs['proxy'])
+        elif upstream.proxy:
+            return upstream.proxy
+        return self.proxy
 
     def _create_middlewares(self):
         wrapped = self
@@ -183,11 +187,10 @@ class Server:
             logger.info('%s loaded', wrapped.__class__.__name__)
         return wrapped
 
-    async def _resolve_by_dns(self, query, upstream):
+    async def _resolve_by_dns(self, query, upstream, proxy):
         response_future = self.loop.create_future()
         upstream_addr = upstream.to_addr()
 
-        proxy = self._get_proxy(upstream)
         if proxy and proxy.udp_tunnel_enabled():
             try:
                 conn = await self.pool.connect(
@@ -225,13 +228,13 @@ class Server:
             transport.close()
         return response
 
-    async def _resolve_by_https(self, query, upstream):
+    async def _resolve_by_https(self, query, upstream, proxy):
         try:
             with await self.pool.connect(
                 upstream.host, 
                 upstream.port, 
                 Scheme.tls, 
-                self._get_proxy(upstream)
+                proxy
             ) as conn:
                 q = base64.b64encode(query).decode().rstrip('=')
                 return (await https.Client(upstream.hostname, conn).get(
@@ -244,13 +247,13 @@ class Server:
         except ConnectionError as exc:
             logger.warning('Failed to connect to %s: %s', upstream.name, exc)
 
-    async def _resolve_by_tls(self, query, upstream):
+    async def _resolve_by_tls(self, query, upstream, proxy):
         try:
             with await self.pool.connect(
                 upstream.host, 
                 upstream.port, 
                 Scheme.tls, 
-                self._get_proxy(upstream)
+                proxy
             ) as conn:
                 query_size = struct.pack('!H', len(query))
                 conn.writer.write(query_size + query)
@@ -272,7 +275,7 @@ class Server:
     def _get_timeout(self, upstream):
         return self.timeout if upstream.timeout is None else upstream.timeout
 
-    def _determine_upstreams(self, kwargs):
+    def _get_upstreams(self, **kwargs):
         if 'upstreams' in kwargs:
             return kwargs['upstreams']
         elif 'upstream_name' in kwargs:
@@ -291,7 +294,8 @@ class Server:
         logger.debug('DNS query:\n%s', request)
         data = DNSRecord.pack(request)
         
-        for upstream in self._determine_upstreams(kwargs):
+        for upstream in self._get_upstreams(**kwargs):
+            proxy = self._get_proxy(upstream, **kwargs)
             if upstream.disable: continue
             if isinstance(upstream, DnsUpstream):
                 resolver = self._resolve_by_dns
@@ -305,7 +309,7 @@ class Server:
             try:
                 with self.stats.record(upstream):
                     response_data = await asyncio.wait_for(
-                        asyncio.shield(resolver(data, upstream)), 
+                        asyncio.shield(resolver(data, upstream, proxy)), 
                         self._get_timeout(upstream)
                     )
                     if response_data is None:
