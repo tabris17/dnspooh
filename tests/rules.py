@@ -119,7 +119,7 @@ class RuleBeforeTest(unittest.TestCase):
         before_parser.parse('set proxy on').exec(request, kwargs)
         self.assertTrue('proxy' not in kwargs)
         before_parser.parse('set proxy off').exec(request, kwargs)
-        self.assertEqual(kwargs['proxy'], False)
+        self.assertEqual(kwargs['proxy'], None)
         before_parser.parse('set proxy to ' + proxy).exec(request, kwargs)
         self.assertEqual(kwargs['proxy'], proxy)
 
@@ -158,8 +158,28 @@ class RuleAfterTest(unittest.TestCase):
         self.assertEqual(str(response.rr[2].rdata), '127.0.0.3')
     
     def test_add_record(self):
-        response = after_parser.parse('add record (127.0.0.3, 127.0.0.4) if always').exec(dns_response('qq.com', '127.0.0.1', '127.0.0.2'), geoip('cn'), ipaddr, run)
+        response = after_parser.parse('add record (127.0.0.3, 127.0.0.4)').exec(dns_response('qq.com', '127.0.0.1', '127.0.0.2'), geoip('cn'), ipaddr, run)
         response = after_parser.parse('add record 127.0.0.5 if always').exec(response, geoip('cn'), ipaddr, run)
+        self.assertEqual(response.header.a, 5)
+        self.assertEqual(str(response.rr[0].rdata), '127.0.0.1')
+        self.assertEqual(str(response.rr[1].rdata), '127.0.0.2')
+        self.assertEqual(str(response.rr[2].rdata), '127.0.0.3')
+        self.assertEqual(str(response.rr[3].rdata), '127.0.0.4')
+        self.assertEqual(str(response.rr[4].rdata), '127.0.0.5')
+    
+    def test_append_record(self):
+        response = after_parser.parse('append record (127.0.0.3, 127.0.0.4)').exec(dns_response('qq.com', '127.0.0.1', '127.0.0.2'), geoip('cn'), ipaddr, run)
+        response = after_parser.parse('append record 127.0.0.5 if always').exec(response, geoip('cn'), ipaddr, run)
+        self.assertEqual(response.header.a, 5)
+        self.assertEqual(str(response.rr[0].rdata), '127.0.0.1')
+        self.assertEqual(str(response.rr[1].rdata), '127.0.0.2')
+        self.assertEqual(str(response.rr[2].rdata), '127.0.0.3')
+        self.assertEqual(str(response.rr[3].rdata), '127.0.0.4')
+        self.assertEqual(str(response.rr[4].rdata), '127.0.0.5')
+    
+    def test_insert_record(self):
+        response = after_parser.parse('insert record (127.0.0.2, 127.0.0.3)').exec(dns_response('qq.com', '127.0.0.4', '127.0.0.5'), geoip('cn'), ipaddr, run)
+        response = after_parser.parse('insert record 127.0.0.1 if always').exec(response, geoip('cn'), ipaddr, run)
         self.assertEqual(response.header.a, 5)
         self.assertEqual(str(response.rr[0].rdata), '127.0.0.1')
         self.assertEqual(str(response.rr[1].rdata), '127.0.0.2')

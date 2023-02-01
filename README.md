@@ -222,10 +222,14 @@ if 由一个或多个判断条件组成的逻辑运算表达式。支持的判�
 - block if *expr1*
 - return *ip* if *expr1*
 - return (*ip1*, *ip2*, ...) if *expr1*
-- add record *ip*
-- add record (*ip1*, *ip2*, ...)
-- add record *ip* if *expr1*
-- add record (*ip1*, *ip2*, ...) if *expr1*
+- append record *ip*
+- append record (*ip1*, *ip2*, ...)
+- append record *ip* if *expr1*
+- append record (*ip1*, *ip2*, ...) if *expr1*
+- insert record *ip*
+- insert record (*ip1*, *ip2*, ...)
+- insert record *ip* if *expr1*
+- insert record (*ip1*, *ip2*, ...) if *expr1*
 - remove record where *expr2*
 - replace record by *ip* where *expr2*
 - run *command* where *expr2*

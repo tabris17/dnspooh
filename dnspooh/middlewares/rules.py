@@ -77,22 +77,30 @@ def _or_op(op, tokens):
     return op, tuple(filter(lambda it: it != 'or', tokens))
 
 
-def _response_add_answers(response, ip_addrs):
+def _response_add_answers(response, ip_addrs, top=False):
     hostname = response.q.qname.idna().rstrip('.')
     qtype = response.q.qtype
     if not isinstance(ip_addrs, Iterable):
         ip_addrs = (ip_addrs, )
-    for ip in ip_addrs:
-        if isinstance(ip, ipaddress.IPv6Address) and qtype == dnslib.QTYPE.AAAA:
-            response.add_answer(dnslib.RR(
-                hostname, qtype, 
-                rdata=dnslib.AAAA(str(ip))
-            ))
-        elif isinstance(ip, ipaddress.IPv4Address) and qtype == dnslib.QTYPE.A:
-            response.add_answer(dnslib.RR(
-                hostname, qtype, 
-                rdata=dnslib.A(str(ip))
-            ))
+
+    if qtype == dnslib.QTYPE.AAAA:
+        records = [
+            dnslib.RR(hostname, qtype, rdata=dnslib.AAAA(str(ip))) 
+            for ip in ip_addrs if isinstance(ip, ipaddress.IPv6Address)
+        ]
+    elif qtype == dnslib.QTYPE.A:
+        records = [
+            dnslib.RR(hostname, qtype, rdata=dnslib.A(str(ip))) 
+            for ip in ip_addrs if isinstance(ip, ipaddress.IPv4Address)
+        ]
+    else:
+        return response
+    if top:
+        records.extend(response.rr)
+        response.rr = records
+        response.set_header_qa()
+    else:
+        response.add_answer(*records)
     return response
 
 
@@ -144,6 +152,10 @@ class OpCode(enum.Enum):
     ALL_GEOIP_NOT_EQ = enum.auto()
     RECORD_ADD = enum.auto()
     RECORD_ADD_IF = enum.auto()
+    RECORD_APPEND = enum.auto()
+    RECORD_APPEND_IF = enum.auto()
+    RECORD_INSERT = enum.auto()
+    RECORD_INSERT_IF = enum.auto()
     RECORD_REMOVE_WHERE = enum.auto()
     RECORD_REPLACE_WHERE = enum.auto()
     RUN_WHERE = enum.auto()
@@ -529,8 +541,11 @@ class RuleAfterParser:
 
             for stm in self.ast:
                 _exec = stm[0]
-                if _exec == OpCode.RECORD_ADD:
+                if _exec in (OpCode.RECORD_ADD, OpCode.RECORD_APPEND):
                     _response_add_answers(response, stm[1])
+                    continue
+                elif _exec == OpCode.RECORD_INSERT:
+                    _response_add_answers(response, stm[1], True)
                     continue
 
                 expr_if = stm[1]
@@ -571,9 +586,12 @@ class RuleAfterParser:
                 elif _exec == OpCode.BLOCK_IF:
                     if test_response(expr_if, response):
                         _response_nxdomain(response)
-                elif _exec == OpCode.RECORD_ADD_IF:
+                elif _exec in (OpCode.RECORD_ADD_IF, OpCode.RECORD_APPEND_IF):
                     if test_response(expr_if, response):
                         _response_add_answers(response, stm[2])
+                elif _exec == OpCode.RECORD_INSERT_IF:
+                    if test_response(expr_if, response):
+                        _response_add_answers(response, stm[2], True)
             return response
 
     def __init__(self):
@@ -677,6 +695,18 @@ class RuleAfterParser:
         stm_record_add_if = ('add record' + (ip_literal | ip_literal_list) + 'if' + expr_if)\
             .set_name('add record if statement')\
             .set_parse_action(lambda tokens: (OpCode.RECORD_ADD_IF, tokens[3], tokens[1]))
+        stm_record_append = ('append record' + (ip_literal | ip_literal_list))\
+            .set_name('append record statement')\
+            .set_parse_action(lambda tokens: (OpCode.RECORD_APPEND, tokens[1]))
+        stm_record_append_if = ('append record' + (ip_literal | ip_literal_list) + 'if' + expr_if)\
+            .set_name('append record if statement')\
+            .set_parse_action(lambda tokens: (OpCode.RECORD_APPEND_IF, tokens[3], tokens[1]))
+        stm_record_insert = ('insert record' + (ip_literal | ip_literal_list))\
+            .set_name('insert record statement')\
+            .set_parse_action(lambda tokens: (OpCode.RECORD_INSERT, tokens[1]))
+        stm_record_insert_if = ('insert record' + (ip_literal | ip_literal_list) + 'if' + expr_if)\
+            .set_name('insert record if statement')\
+            .set_parse_action(lambda tokens: (OpCode.RECORD_INSERT_IF, tokens[3], tokens[1]))
         stm_record_remove_where = ('remove record where' + expr_where)\
             .set_name('remove record where statement')\
             .set_parse_action(lambda tokens: (OpCode.RECORD_REMOVE_WHERE, *tokens[1:]))
@@ -689,6 +719,10 @@ class RuleAfterParser:
         stm_simple = (
             stm_record_add_if |
             stm_record_add |
+            stm_record_append_if |
+            stm_record_append |
+            stm_record_insert_if |
+            stm_record_insert |
             stm_record_remove_where |
             stm_record_replace_where |
             stm_run_command_where
