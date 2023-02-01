@@ -108,10 +108,20 @@ class RuleBeforeTest(unittest.TestCase):
     def test_set_upstream(self):
         kwargs = dict()
         request = dns_request('baidu.com')
-        after_handler = before_parser.parse('set upstream group to cn, set upstream name to cloudflare-tls').exec(request, kwargs)
-        self.assertEqual(after_handler, None)
+        before_parser.parse('set upstream group to cn, set upstream name to cloudflare-tls').exec(request, kwargs)
         self.assertEqual(kwargs['upstream_group'], 'cn')
         self.assertEqual(kwargs['upstream_name'], 'cloudflare-tls')
+
+    def test_set_proxy(self):
+        proxy = 'socks5://127.0.0.0:1080'
+        kwargs = dict()
+        request = dns_request('baidu.com')
+        before_parser.parse('set proxy on').exec(request, kwargs)
+        self.assertTrue('proxy' not in kwargs)
+        before_parser.parse('set proxy off').exec(request, kwargs)
+        self.assertEqual(kwargs['proxy'], False)
+        before_parser.parse('set proxy to ' + proxy).exec(request, kwargs)
+        self.assertEqual(kwargs['proxy'], proxy)
 
 
 def geoip(code):

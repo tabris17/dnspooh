@@ -21,11 +21,9 @@ logger = logging.getLogger(__name__)
 
 opt_comma = pyparsing.Suppress(pyparsing.Opt(','))
 
-_dec_num = pyparsing.Word(pyparsing.nums, max=3)
+_ipv4_literal = pyparsing.common.ipv4_address
 
-_ipv4_literal = _dec_num - ('.' + _dec_num) * 3
-
-_ipv6_literal = pyparsing.Word(pyparsing.hexnums + ':.')
+_ipv6_literal = pyparsing.common.ipv6_address
 
 _ipv4_cidr_literal = _ipv4_literal + '/' + pyparsing.Word(pyparsing.nums, max=2)
 
@@ -63,6 +61,9 @@ ip_literal_list = (pyparsing.Suppress('(') + pyparsing.OneOrMore(ip_literal + op
 ip_literal_set = (pyparsing.Suppress('(') + pyparsing.OneOrMore(ip_literal + opt_comma) + pyparsing.Suppress(')'))\
     .set_name('set of ip addresses')\
     .set_parse_action(lambda tokens: set(tokens))
+
+proxy_literal = pyparsing.Regex(r'(http|socks5):\/\/([\w\.-:@%]+)').set_name('proxy')\
+    .set_parse_action(lambda tokens: tokens[0])
 
 always_literal = pyparsing.Literal('always').set_name('always')\
     .set_parse_action(lambda _: True)
@@ -120,6 +121,7 @@ class OpCode(enum.Enum):
     UPSTREAM_GROUP_SET = enum.auto()
     UPSTREAM_NAME_SET = enum.auto()
     DOMAIN_REPLACE = enum.auto()
+    PROXY_SET = enum.auto()
     FIRST = enum.auto()
     LAST = enum.auto()
     IP_IN = enum.auto()
@@ -353,6 +355,13 @@ class RuleBeforeParser:
                 elif _exec == OpCode.DOMAIN_REPLACE:
                     after_handler = ReplacDomainHandler(request.q.qname)
                     request.q.qname = stm[1]
+                elif _exec == OpCode.PROXY_SET:
+                    if stm[1] == 'on':
+                        kwargs.pop('proxy', None)
+                    elif stm[1] == 'off':
+                        kwargs['proxy'] = None
+                    else:
+                        kwargs['proxy'] = stm[1]
             return after_handler
 
     def __init__(self):
@@ -369,10 +378,22 @@ class RuleBeforeParser:
         stm_domain_replace = ('replace domain by' + domain_literal)\
             .set_name('replace domain statement')\
             .set_parse_action(lambda tokens: (OpCode.DOMAIN_REPLACE, tokens[1]))
+        stm_proxy_on = pyparsing.Literal('set proxy on')\
+            .set_name('set proxy on statement')\
+            .set_parse_action(lambda _: (OpCode.PROXY_SET, 'on'))
+        stm_proxy_off = pyparsing.Literal('set proxy off')\
+            .set_name('set proxy off statement')\
+            .set_parse_action(lambda _: (OpCode.PROXY_SET, 'off'))
+        stm_proxy_set = ('set proxy to' + proxy_literal)\
+            .set_name('set proxy to statement')\
+            .set_parse_action(lambda tokens: (OpCode.PROXY_SET, tokens[1]))
         stm_simple = (
             stm_upstream_name_set |
             stm_upstream_group_set |
-            stm_domain_replace
+            stm_domain_replace |
+            stm_proxy_on |
+            stm_proxy_off |
+            stm_proxy_set
         )
         self.parser = pyparsing.OneOrMore(stm_simple + opt_comma)
 
