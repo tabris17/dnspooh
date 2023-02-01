@@ -279,6 +279,9 @@ pip install cx_freeze
 python bundle.py build
 ```
 
+> 为何不使用 Nuitka ？
+> 由于项目代码使用了一些 Python 3.11 的特性，而 Nuitka 暂时还不支持 Python 3.11 的编译。考虑未来去掉代码中对 Python 3.11 特性的依赖，从而支持 Nuitka 。
+
 运行单元测试：
 
 ```shell
