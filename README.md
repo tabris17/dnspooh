@@ -213,6 +213,9 @@ if 由一个或多个判断条件组成的逻辑运算表达式。支持的判�
 - set upstream group to *name*
 - set upstream name to *name*
 - replace domain by *domain*
+- set proxy on
+- set proxy off
+- set proxy to *proxy*
 
 ### after 语句
 
