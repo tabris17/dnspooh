@@ -170,6 +170,15 @@ rules:
 
 可以用圆括号运算符 `(` 与 `)` 来改变逻辑运算符的优先级。
 
+```yaml
+rules:
+  - if: (domain ends with .cn or domain ends with .top) and not blog in domain
+    then: block
+    end: true
+```
+
+上面的配置作用是，如果是 .cn 或 .top 域名，且域名中没有包含 blog 关键字，则屏蔽。
+
 ### if 表达式
 
 if 由一个或多个判断条件组成的逻辑运算表达式。支持的判断条件有：
