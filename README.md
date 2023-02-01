@@ -179,85 +179,126 @@ rules:
 
 上面的配置作用是，如果是 .cn 或 .top 域名，且域名中没有包含 blog 关键字，则屏蔽。
 
-### if 表达式
+### 3.1 if 表达式
 
-if 由一个或多个判断条件组成的逻辑运算表达式。支持的判断条件有：
+if 字段由一个或多个判断条件组成的逻辑运算表达式。支持的判断条件有：
 
-- domain is *domain*
-- domain is (*domain1*, *domain2*, ...)
-- domain is not *domain*
-- domain is not (*domain1*, *domain2*, ...)
-- *keyword* in domain
-- (*keyword1*, *keyword2*, ...) in domain
-- *keyword* not in domain
-- (*keyword1*, *keyword2*, ...) not in domain
-- domain starts with *prefix*
-- domain starts with (*prefix1*, *prefix2*, ...)
-- domain starts without *prefix*
-- domain starts without (*prefix1*, *prefix2*, ...)
-- domain ends with *suffix*
-- domain ends with (*suffix1*, *suffix2*, ...)
-- domain ends without *suffix*
-- domain ends without (*suffix1*, *suffix2*, ...)
-- domain match /*regex*/
-- always
+- domain is *domain*  
+  域名等于 *domain*
+- domain is (*domain1*, *domain2*, ...)  
+  域名与列表中任一 *domain* 相等，等价于 domain is *domain1* or domain is *domain2* or ...
+- domain is not *domain*  
+  域名不等于 *domain* ，等价于 not domain is *domain*
+- domain is not (*domain1*, *domain2*, ...)  
+  域名不等于列表中的任何 *domain* ，等价于 domain is not *domain1* and domain is not *domain2* and ...
+- *keyword* in domain  
+  域名包含 *keyword*
+- (*keyword1*, *keyword2*, ...) in domain  
+  域名包含列表中任一 *keyword* ，等价于 *keyword1* in domain or *keyword2* in domain or ...
+- *keyword* not in domain  
+  域名不包含 *keyword* ，等价于 not *keyword* in domain
+- (*keyword1*, *keyword2*, ...) not in domain  
+  域名不包含列表中的任何 *keyword* ，等价于 *keyword1* not in domain and *keyword2* not in domain and ...
+- domain starts with *prefix*  
+  域名前缀为 *prefix*
+- domain starts with (*prefix1*, *prefix2*, ...)  
+  域名前缀是列表中的任一 *prefix* ，等价于 domain starts with *prefix1* or domain starts with *prefix2* or ...    
+- domain starts without *prefix*  
+  域名前缀不为 *prefix* ，等价于 not domain starts with *prefix*  
+- domain starts without (*prefix1*, *prefix2*, ...)  
+  域名前缀不为列表中的任何 *prefix* ，等价于 domain starts without *prefix1* and domain starts without *prefix2* and ...
+- domain ends with *suffix*  
+  域名后缀为 *suffix*
+- domain ends with (*suffix1*, *suffix2*, ...)  
+  域名后缀为列表中的任一 *suffix* ，等价于 domain starts with *suffix1* or domain starts with *suffix2* or ...    
+- domain ends without *suffix*  
+  域名后缀不为 *suffix* ，等价于 not domain ends with *suffix*  
+- domain ends without (*suffix1*, *suffix2*, ...)  
+  域名后缀不为列表中的任何 *suffix* ，等价于 domain ends without *suffix1* and domain ends without *suffix2* and ...    
+- domain match /*regex*/  
+  域名完整匹配正则表达式 *regex*
+- always  
+  总是为真
 
-### then 语句
+### 3.2 then 语句
 
-- block
-- return *ip*
-- return (*ip1*, *ip2*, ...)
+then 字段可以是下列任意语句之一：
 
-### before 语句
+- block  
+  屏蔽当前请求
+- return *ip*  
+- return (*ip1*, *ip2*, ...)  
+  直接返回解析结果
 
-- set upstream group to *name*
-- set upstream name to *name*
-- replace domain by *domain*
-- set proxy on
-- set proxy off
-- set proxy to *proxy*
+### 3.3 before 语句
 
-### after 语句
+- set upstream group to *name*  
+  使用 *name* 组中的上游服务器来解析域名
+- set upstream name to *name*  
+  使用名称为 *name* 的上游服务器来解析域名
+- replace domain by *domain*  
+  将请求中的域名替换为 *domain*
+- set proxy on  
+  启用代理服务器访问上游服务器（须在配置文件中设置 proxy 项）
+- set proxy off  
+  禁用代理服务器访问上游服务器
+- set proxy to *proxy*  
+  指定代理服务器访问上游服务器。*proxy* 格式如 http://127.0.0.1:8080 或 socks5://127.0.0.1:1080 
 
-- block if *expr1*
-- return *ip* if *expr1*
+### 3.4 after 语句
+
+- block if *expr1*  
+  当解析结果满足条件（ *expr1* 表达式为真）时，屏蔽域名
+- return *ip* if *expr1*  
+  当解析结果满足条件（ *expr1* 表达式为真）时，用 *ip* 替代解析结果
 - return (*ip1*, *ip2*, ...) if *expr1*
-- append record *ip*
+- append record *ip*  
+  在上游服务器返回的解析结果后追加记录
 - append record (*ip1*, *ip2*, ...)
 - append record *ip* if *expr1*
 - append record (*ip1*, *ip2*, ...) if *expr1*
-- insert record *ip*
+- insert record *ip*  
+  在上游服务器返回的解析结果前插入记录
 - insert record (*ip1*, *ip2*, ...)
 - insert record *ip* if *expr1*
 - insert record (*ip1*, *ip2*, ...) if *expr1*
-- remove record where *expr2*
-- replace record by *ip* where *expr2*
-- run *command* where *expr2*
+- remove record where *expr2*  
+  从解析结果中移除满足条件（ *expr2* 表达式为真）的记录
+- replace record by *ip* where *expr2*  
+  用 *ip* 替换满足条件（ *expr2* 表达式为真）的记录
+- run "*command*" where *expr2*  
+  当解析结果中存在满足条件的记录时，执行 *command* 命令。命令需要用半角双引号包裹，命令中可以使用 `{ip}` 占位符表示当前记录的 IP 地址。
 
-expr1 类型的表达式支持的判断条件有：
+#### 3.4.1 expr1 类型表达式
 
-- any ip is *ip*
+- any ip is *ip*  
+  解析结果中存在 IP 地址等于 *ip* 的记录
 - any ip is (*ip1*, *ip2*, ...)
 - any ip is not *ip*
 - any ip is not (*ip1*, *ip2*, ...)
-- any ip in *cidr*
+- any ip in *cidr*  
+  解析结果中存在 IP 地址在 *cidr* 范围内的记录。 *cidr* 使用 IP-CIDR 格式表示，如 192.168.1.1/24
 - any ip in (*cidr1*, *cidr2*, ...)
 - any ip not in *cidr*
 - any ip not in (*cidr1*, *cidr2*, ...)
-- any geoip is *country*
+- any geoip is *country*  
+  解析结果中存在 IP 地址所在国为 *country* 的记录
 - any geoip is not *country*
-- all ip is *ip*
+- all ip is *ip*  
+  解析结果中所有记录的 IP 地址都等于 *ip* 
 - all ip is (*ip1*, *ip2*, ...)
 - all ip is not *ip*
 - all ip is not (*ip1*, *ip2*, ...)
-- all ip in *cidr*
+- all ip in *cidr*  
+  解析结果中所有记录的 IP 地址都在 *cidr* 范围内 
 - all ip in (*cidr1*, *cidr2*, ...)
 - all ip not in *cidr*
 - all ip not in (*cidr1*, *cidr2*, ...)
-- all geoip is *country*
+- all geoip is *country*  
+  解析结果中所有记录的 IP 所在国都为 *country*  
 - all geoip is not *country*
 
-expr2 类型的表达式支持的判断条件有：
+#### 3.4.2 expr2 类型表达式
 
 - ip is *ip*
 - ip is (*ip1*, *ip2*, ....)
@@ -269,8 +310,10 @@ expr2 类型的表达式支持的判断条件有：
 - ip not in (*cidr1*, *cidr2*, ...)
 - geoip is *country*
 - geoip is not *country*
-- first
-- last
+- first  
+  第一条记录
+- last  
+  最后一条记录
 
 ## 4. 特性
 
