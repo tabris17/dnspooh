@@ -17,6 +17,8 @@ class UpstreamCollection:
             upstreams = list(filter(
                 lambda up: isinstance(up, (TlsUpstream, HttpsUpstream)), 
                 upstreams))
+        if not upstreams:
+            raise ValueError('No upstream server available')
         self._upstreams = upstreams
         self._grouped = dict()
         for upstream in upstreams:
@@ -77,7 +79,7 @@ class Upstream:
     def __init__(self, **kwargs):
         self.name = kwargs.get('name')
         if not isinstance(self.name, str) or self.name == '':
-            raise ValueError('Upstream name must be a string')
+            raise ValueError('Upstream name must be a non-empty string')
         self.proxy = kwargs.get('proxy')
         self.timeout = kwargs.get('timeout')
         self.groups = kwargs.get('groups', [])
@@ -156,15 +158,16 @@ def parse_upstream(server):
     )
 
     if parsed_url.scheme == 'https':
-        return HttpsUpstream(url=server)
+        return HttpsUpstream(name=server, url=server)
 
     if parsed_url.path == '' and \
        parsed_url.query == '' and \
        parsed_url.fragment == '':
         if parsed_url.port == DEFAULT_DOT_PORT:
-            return TlsUpstream(host=parsed_url.hostname, port=DEFAULT_DOT_PORT)
+            return TlsUpstream(name=server, host=parsed_url.hostname, port=DEFAULT_DOT_PORT)
         else:
-            return DnsUpstream(host=parsed_url.hostname, 
+            return DnsUpstream(name=server, 
+                               host=parsed_url.hostname, 
                                port=DEFAULT_DNS_PORT \
                                    if parsed_url.port is None \
                                    else parsed_url.port)

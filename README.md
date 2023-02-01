@@ -1,6 +1,6 @@
 # Dnspooh
 
-Dnspooh 是一个轻量级 DNS 中继和代理服务器，可以为本机或本地网络提供安全的 DNS 解析服务，并可以通过配置文件，屏蔽指定的域名和解析结果。
+Dnspooh 是一个轻量级 DNS 中继和代理服务器，可以为本机或本地网络提供安全的 DNS 解析服务，支持代理服务器、 hosts 文件、域名和 IP 黑名单，以及自定义规则。
 
 ## 1. 安装和运行
 
@@ -67,7 +67,7 @@ options:
   --help                show this help message and exit
 ```
 
-可以通过命令行参数和配置文件来对程序进行设置。**通过命令行参数传递的设置优先级高于配置文件中对应的设置。**如果没有指定配置文件，程序启动后会尝试加载当前目录下的 `config.yml` 配置文件。如果配置文件不存在，则使用默认配置。通过命令行参数 `-d` 可以查看当前的配置：
+可以通过命令行参数和配置文件来对程序进行设置。通过命令行参数传递的设置优先级高于配置文件中对应的设置。如果没有指定配置文件，程序启动后会尝试加载当前目录下的 `config.yml` 配置文件。如果配置文件不存在，则使用默认配置。通过命令行参数 `-d` 可以查看当前的配置：
 
 ```shell
 dnspooh -c config.yml -d
@@ -95,14 +95,14 @@ middlewares:
   - cache
 ```
 
-配置文件支持 `!path` 和 `!include` 两个扩展指令。当配置项目是一个文件名时，使用 `!path` 指令表示以当前配置文件所在路径作为文件的起始位置，如果不使用 `!path` 指令，则以程序当前路径作为文件起始位置。 `!include` 指令用来引用外部 yaml 配置文件，该配置文件所在路径作为外部配置文件的起始位置。
+配置文件支持 `!path` 和 `!include` 两个扩展指令。当配置项目是一个文件名时，使用 `!path` 指令表示以当前配置文件所在路径作为文件相对路径的起始位置，如果不使用 `!path` 指令，则以程序运行路径作为文件相对路径的起始位置。 `!include` 指令用来引用外部 yaml 配置文件，当前配置文件的所在路径作为被引用配置文件相对路径的起始位置。
 
 | 配置名         | 数据类型 | 默认      | 描述                                                         |
 | -------------- | -------- | --------- | ------------------------------------------------------------ |
 | debug          | Boolean  | false     | 控制台/终端是否输出调试信息                                  |
 | host           | String   | "0.0.0.0" | 服务绑定本机地址                                             |
 | port           | Integer  | 53        | 服务绑定本机端口                                             |
-| geoip          | String   |           | GeoIP2 地理数据库。默认使用 [GeoIP2-CN](https://github.com/Hackl0us/GeoIP2-CN) |
+| geoip          | String   |           | GeoIP2 数据库文件路径。默认使用 [GeoIP2-CN](https://github.com/Hackl0us/GeoIP2-CN) |
 | secure         | Boolean  | true      | 仅使用安全（DoH/DoT）的上游 DNS 服务器                       |
 | timeout        | Float    | 5.0       | 上游 DNS 服务器响应超时时间（单位：秒）                      |
 | proxy          | String   |           | 代理服务器，支持 HTTP 和 SOCKS5 代理                         |
@@ -110,7 +110,7 @@ middlewares:
 | rules          | Array    |           | 自定义规则列表                                               |
 | hosts          | Array    |           | hosts 文件列表。支持 http/https 链接                         |
 | block          | Array    |           | 黑名单文件列表。支持 http/https 链接                         |
-| cache          | Object   |           | 缓存配置                                                     |
+| cache          |          |           | 缓存配置                                                     |
 | cache.max_size | Integer  | 4096      | 最大缓存条目数                                               |
 | cache.ttl      | Integer  | 86400     | 缓存有效期（单位：秒）                                       |
 
@@ -137,7 +137,7 @@ hosts:
 
 ## 3. 自定义规则
 
-通过自定义规则中间件，可以实现按条件屏蔽域名、自定义解析结果等操作。可以在配置文件的 `rules` 单元中设置一组或多组规则，每组规则由 `if` 、 `then` 、 `before` 、 `after` 、 `end` 字段组合而成。根据不同的需求，一组规则可以是由 `if/then/end` 字段组成；或者是由 `if/before/after/end` 字段组成。其中 `end` 字段是可选的，表示命中并处理完此条规则后是否停止处理后续规则，默认值为 `false` ； `if` 字段是一个表达式，当表达式结果为真时，则表示命中这条规则； `then` 字段是一条语句，可以在这里直接拦截 DNS 解析请求，返回 NXDOMAIN （域名不存在）或自定义解析结果； `before` 字段是一组逗号分隔的命令语句，在 DNS 解析请求被转发到上游服务器之前被处理，可以用于指定上游服务器以及替换请求中的域名； `after` 字段也是一组逗号分隔的命令语句，在 DNS 解析结果从上游服务器返回之后被处理，可以根据返回的结果进行修改操作或执行外部命令。
+通过自定义规则中间件，可以实现按条件屏蔽域名、自定义解析结果等操作。可以在配置文件的 `rules` 单元中设置一组或多组规则，每组规则由 `if` 、 `then` 、 `before` 、 `after` 、 `end` 字段组合而成。根据不同的需求，一组规则可以由 `if/then/end` 字段组成；或者由 `if/before/after/end` 字段组成。其中 `end` 字段是可选的，表示命中并处理完此条规则后是否停止处理后续规则，默认值为 `false` ； `if` 字段是一个表达式，当表达式结果为真时，则表示命中这条规则； `then` 字段是一条语句，可以在此处直接拦截 DNS 解析请求，直接返回 NXDOMAIN （域名不存在）或自定义解析结果，而不会将请求转发到上游服务器； `before` 字段是一组逗号分隔的命令语句，在 DNS 解析请求被转发到上游服务器之前被处理，可以用于指定上游服务器以及替换请求中的域名； `after` 字段也是一组逗号分隔的命令语句，在 DNS 解析结果从上游服务器返回之后被处理，可以根据返回的结果进行修改操作或执行外部命令。
 
 配置例子：
 
@@ -167,6 +167,17 @@ rules:
 1. not *expr*
 2. *expr* and *expr*
 3. *expr* or *expr*
+
+可以用圆括号运算符 `(` 与 `)` 来改变逻辑运算符的优先级。
+
+```yaml
+rules:
+  - if: (domain ends with .cn or domain ends with .top) and not blog in domain
+    then: block
+    end: true
+```
+
+上面的配置作用是，如果是 .cn 或 .top 域名，且域名中没有包含 blog 关键字，则屏蔽。
 
 ### if 表达式
 
@@ -259,7 +270,7 @@ expr2 类型的表达式支持的判断条件有：
 - 如果 DNS 解析请求中包含多条查询，会被逐条拆分后发送至上游服务器，并在返回响应时重新组合。这么做的目的是为了方便中间件处理；
 - 程序启动时会测试配置中所有的上游服务器，并将响应最快的服务器设置为主服务器；
 - 程序内置的 GeoIP2 数据库仅包含中国 IP 段数据，只能返回 `cn` 或空。要使用完整的 GeoIP2 数据库，可以在配置文件中指定数据库文件；
-- 程序内置的上游 DNS 解析服务器包括：[Cloudflare DNS](https://1.1.1.1/dns/), [Google Public DNS](https://developers.google.com/speed/public-dns), [阿里公共DNS](https://alidns.com/), [114DNS](https://www.114dns.com/), [OneDNS](https://www.onedns.net/), [DNSPod](https://www.dnspod.cn/), [百度DNS](https://dudns.baidu.com/), [OpenDNS](https://www.opendns.com/), [AdGuard DNS](https://adguard-dns.io/) 。
+- 程序内置的上游 DNS 解析服务器包括：[Cloudflare DNS](https://1.1.1.1/dns/) (cloudflare), [Google Public DNS](https://developers.google.com/speed/public-dns) (google), [阿里公共DNS](https://alidns.com/) (alidns), [114DNS](https://www.114dns.com/) (114dns), [OneDNS ](https://www.onedns.net/)(onedns), [DNSPod](https://www.dnspod.cn/) (dnspod), [百度DNS](https://dudns.baidu.com/)(baidu), [OpenDNS](https://www.opendns.com/) (opendns), [AdGuard DNS](https://adguard-dns.io/) (adguard) 。这些服务器按照（括号内）服务供应商的名称分为不同小组；又根据服务器所在地，分为 cn (中国)组和 global (全球)组。
 
 ## 5. 常用命令
 
@@ -276,6 +287,10 @@ python -m build
 pip install cx_freeze
 python bundle.py build
 ```
+
+> 为何不使用 Nuitka ？
+>
+> 由于项目代码使用了一些 Python 3.11 的特性，而 Nuitka 暂时还不支持 Python 3.11 的编译。考虑未来去掉代码中对 Python 3.11 特性的依赖，从而支持 Nuitka 。
 
 运行单元测试：
 
