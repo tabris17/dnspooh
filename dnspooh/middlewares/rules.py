@@ -21,11 +21,9 @@ logger = logging.getLogger(__name__)
 
 opt_comma = pyparsing.Suppress(pyparsing.Opt(','))
 
-_dec_num = pyparsing.Word(pyparsing.nums, max=3)
+_ipv4_literal = pyparsing.common.ipv4_address
 
-_ipv4_literal = _dec_num - ('.' + _dec_num) * 3
-
-_ipv6_literal = pyparsing.Word(pyparsing.hexnums + ':.')
+_ipv6_literal = pyparsing.common.ipv6_address
 
 _ipv4_cidr_literal = _ipv4_literal + '/' + pyparsing.Word(pyparsing.nums, max=2)
 
@@ -64,6 +62,9 @@ ip_literal_set = (pyparsing.Suppress('(') + pyparsing.OneOrMore(ip_literal + opt
     .set_name('set of ip addresses')\
     .set_parse_action(lambda tokens: set(tokens))
 
+proxy_literal = pyparsing.Regex(r'(http|socks5):\/\/([\w\.-:@%]+)').set_name('proxy')\
+    .set_parse_action(lambda tokens: tokens[0])
+
 always_literal = pyparsing.Literal('always').set_name('always')\
     .set_parse_action(lambda _: True)
 
@@ -76,22 +77,30 @@ def _or_op(op, tokens):
     return op, tuple(filter(lambda it: it != 'or', tokens))
 
 
-def _response_add_answers(response, ip_addrs):
+def _response_add_answers(response, ip_addrs, top=False):
     hostname = response.q.qname.idna().rstrip('.')
     qtype = response.q.qtype
     if not isinstance(ip_addrs, Iterable):
         ip_addrs = (ip_addrs, )
-    for ip in ip_addrs:
-        if isinstance(ip, ipaddress.IPv6Address) and qtype == dnslib.QTYPE.AAAA:
-            response.add_answer(dnslib.RR(
-                hostname, qtype, 
-                rdata=dnslib.AAAA(str(ip))
-            ))
-        elif isinstance(ip, ipaddress.IPv4Address) and qtype == dnslib.QTYPE.A:
-            response.add_answer(dnslib.RR(
-                hostname, qtype, 
-                rdata=dnslib.A(str(ip))
-            ))
+
+    if qtype == dnslib.QTYPE.AAAA:
+        records = [
+            dnslib.RR(hostname, qtype, rdata=dnslib.AAAA(str(ip))) 
+            for ip in ip_addrs if isinstance(ip, ipaddress.IPv6Address)
+        ]
+    elif qtype == dnslib.QTYPE.A:
+        records = [
+            dnslib.RR(hostname, qtype, rdata=dnslib.A(str(ip))) 
+            for ip in ip_addrs if isinstance(ip, ipaddress.IPv4Address)
+        ]
+    else:
+        return response
+    if top:
+        records.extend(response.rr)
+        response.rr = records
+        response.set_header_qa()
+    else:
+        response.add_answer(*records)
     return response
 
 
@@ -120,6 +129,7 @@ class OpCode(enum.Enum):
     UPSTREAM_GROUP_SET = enum.auto()
     UPSTREAM_NAME_SET = enum.auto()
     DOMAIN_REPLACE = enum.auto()
+    PROXY_SET = enum.auto()
     FIRST = enum.auto()
     LAST = enum.auto()
     IP_IN = enum.auto()
@@ -142,6 +152,10 @@ class OpCode(enum.Enum):
     ALL_GEOIP_NOT_EQ = enum.auto()
     RECORD_ADD = enum.auto()
     RECORD_ADD_IF = enum.auto()
+    RECORD_APPEND = enum.auto()
+    RECORD_APPEND_IF = enum.auto()
+    RECORD_INSERT = enum.auto()
+    RECORD_INSERT_IF = enum.auto()
     RECORD_REMOVE_WHERE = enum.auto()
     RECORD_REPLACE_WHERE = enum.auto()
     RUN_WHERE = enum.auto()
@@ -353,6 +367,13 @@ class RuleBeforeParser:
                 elif _exec == OpCode.DOMAIN_REPLACE:
                     after_handler = ReplacDomainHandler(request.q.qname)
                     request.q.qname = stm[1]
+                elif _exec == OpCode.PROXY_SET:
+                    if stm[1] == 'on':
+                        kwargs.pop('proxy', None)
+                    elif stm[1] == 'off':
+                        kwargs['proxy'] = None
+                    else:
+                        kwargs['proxy'] = stm[1]
             return after_handler
 
     def __init__(self):
@@ -369,10 +390,22 @@ class RuleBeforeParser:
         stm_domain_replace = ('replace domain by' + domain_literal)\
             .set_name('replace domain statement')\
             .set_parse_action(lambda tokens: (OpCode.DOMAIN_REPLACE, tokens[1]))
+        stm_proxy_on = pyparsing.Literal('set proxy on')\
+            .set_name('set proxy on statement')\
+            .set_parse_action(lambda _: (OpCode.PROXY_SET, 'on'))
+        stm_proxy_off = pyparsing.Literal('set proxy off')\
+            .set_name('set proxy off statement')\
+            .set_parse_action(lambda _: (OpCode.PROXY_SET, 'off'))
+        stm_proxy_set = ('set proxy to' + proxy_literal)\
+            .set_name('set proxy to statement')\
+            .set_parse_action(lambda tokens: (OpCode.PROXY_SET, tokens[1]))
         stm_simple = (
             stm_upstream_name_set |
             stm_upstream_group_set |
-            stm_domain_replace
+            stm_domain_replace |
+            stm_proxy_on |
+            stm_proxy_off |
+            stm_proxy_set
         )
         self.parser = pyparsing.OneOrMore(stm_simple + opt_comma)
 
@@ -508,8 +541,11 @@ class RuleAfterParser:
 
             for stm in self.ast:
                 _exec = stm[0]
-                if _exec == OpCode.RECORD_ADD:
+                if _exec in (OpCode.RECORD_ADD, OpCode.RECORD_APPEND):
                     _response_add_answers(response, stm[1])
+                    continue
+                elif _exec == OpCode.RECORD_INSERT:
+                    _response_add_answers(response, stm[1], True)
                     continue
 
                 expr_if = stm[1]
@@ -550,9 +586,12 @@ class RuleAfterParser:
                 elif _exec == OpCode.BLOCK_IF:
                     if test_response(expr_if, response):
                         _response_nxdomain(response)
-                elif _exec == OpCode.RECORD_ADD_IF:
+                elif _exec in (OpCode.RECORD_ADD_IF, OpCode.RECORD_APPEND_IF):
                     if test_response(expr_if, response):
                         _response_add_answers(response, stm[2])
+                elif _exec == OpCode.RECORD_INSERT_IF:
+                    if test_response(expr_if, response):
+                        _response_add_answers(response, stm[2], True)
             return response
 
     def __init__(self):
@@ -656,6 +695,18 @@ class RuleAfterParser:
         stm_record_add_if = ('add record' + (ip_literal | ip_literal_list) + 'if' + expr_if)\
             .set_name('add record if statement')\
             .set_parse_action(lambda tokens: (OpCode.RECORD_ADD_IF, tokens[3], tokens[1]))
+        stm_record_append = ('append record' + (ip_literal | ip_literal_list))\
+            .set_name('append record statement')\
+            .set_parse_action(lambda tokens: (OpCode.RECORD_APPEND, tokens[1]))
+        stm_record_append_if = ('append record' + (ip_literal | ip_literal_list) + 'if' + expr_if)\
+            .set_name('append record if statement')\
+            .set_parse_action(lambda tokens: (OpCode.RECORD_APPEND_IF, tokens[3], tokens[1]))
+        stm_record_insert = ('insert record' + (ip_literal | ip_literal_list))\
+            .set_name('insert record statement')\
+            .set_parse_action(lambda tokens: (OpCode.RECORD_INSERT, tokens[1]))
+        stm_record_insert_if = ('insert record' + (ip_literal | ip_literal_list) + 'if' + expr_if)\
+            .set_name('insert record if statement')\
+            .set_parse_action(lambda tokens: (OpCode.RECORD_INSERT_IF, tokens[3], tokens[1]))
         stm_record_remove_where = ('remove record where' + expr_where)\
             .set_name('remove record where statement')\
             .set_parse_action(lambda tokens: (OpCode.RECORD_REMOVE_WHERE, *tokens[1:]))
@@ -668,6 +719,10 @@ class RuleAfterParser:
         stm_simple = (
             stm_record_add_if |
             stm_record_add |
+            stm_record_append_if |
+            stm_record_append |
+            stm_record_insert_if |
+            stm_record_insert |
             stm_record_remove_where |
             stm_record_replace_where |
             stm_run_command_where
