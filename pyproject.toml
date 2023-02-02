@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dnspooh"
-description = "A Lightweight DNS Proxy/Relay"
+description = "A Lightweight DNS MitM Proxy"
 authors = [
   { name="tabris17", email="tabris17.cn@gmail.com" },
 ]

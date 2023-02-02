@@ -337,7 +337,7 @@ class Server:
 
     async def _respond(self, writer, response):
         try:
-            response.headers.add_header('Server', 'DNSPooh')
+            response.headers.add_header('Server', __package__)
             start_line = '%s %s %s\r\n' % (response.version, response.status, response.status.name)
             writer.write(start_line.encode())
             if isinstance(response, FileResponse):
