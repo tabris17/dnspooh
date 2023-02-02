@@ -5,7 +5,7 @@ import sys
 
 from . import https
 from . import server
-from . import __version__
+from . import __version__, __description__
 from .config import *
 from .upstream import *
 
@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
-        prog = 'DNSPooh',
-        description = 'A MitM DNS Proxy',
+        prog = __package__,
+        description = __description__,
         add_help=False
     )
 
@@ -40,6 +40,7 @@ def parse_arguments():
 
 async def startup():
     try:
+        debug = True
         args = parse_arguments()
         config = Config.load(args)
         if args.dump:

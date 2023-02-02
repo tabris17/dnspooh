@@ -49,9 +49,9 @@ python main.py --help
 通过命令行的 `--help` 参数可以查看 Dnspooh 支持的命令行参数：
 
 ```text
-usage: DNSPooh [-c file] [-u servers [servers ...]] [-t ms] [-h host] [-p port] [-D] [-d] [-v] [--help]
+usage: dnspooh [-c file] [-u servers [servers ...]] [-t ms] [-h host] [-p port] [-D] [-d] [-v] [--help]
 
-A MitM DNS Proxy
+A Lightweight DNS MitM Proxy
 
 options:
   -c file, --config file
