@@ -82,6 +82,7 @@ class BlockMiddleware(Middleware):
                     return _nxdomain(request)
 
         response = await super().handle(request, **kwargs)
+        if response is None: return
 
         for rr in filter(lambda rr: rr.rtype in (dnslib.QTYPE.A, dnslib.QTYPE.AAAA), response.rr):
             ip_addr = ipaddress.ip_address(str(rr.rdata))
