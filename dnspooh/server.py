@@ -136,14 +136,14 @@ class Server:
         async def test_upstream(upstream):
             start_counter = time.perf_counter()
             response = await self.handle(request, upstreams=[upstream])
-            cost_time = time.perf_counter() - start_counter
+            cost_time_sec = time.perf_counter() - start_counter
             if not response or response.header.a == 0:
                 upstream.disable = True
                 upstream.priority = -1
                 logger.warning('Test upstream %s failed', upstream.name)
             else:
-                timeout = self._get_timeout(upstream)
-                upstream.priority = int(max(0, timeout - cost_time) / timeout * 1000)
+                timeout_sec = self._get_timeout(upstream)
+                upstream.priority = int(max(0, timeout_sec - cost_time_sec) / timeout_sec * 1000)
                 logger.info('Test upstream %s passed, responding speed: %d', upstream.name, upstream.priority)
 
         await asyncio.gather(*[test_upstream(_) for _ in self.upstreams.all() if not _.disable])
