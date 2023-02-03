@@ -435,6 +435,11 @@ DEFAULT_CONFIG = {
         'max_size': CACHE_MAX_SIZE,
         'ttl': CACHE_TTL,
     },
+    'log': {
+        'path': 'access.log',
+        'trace': True,
+        'payload': True,
+    },
     'http': {
         'host': HTTP_HOST,
         'port': HTTP_PORT,
@@ -570,7 +575,7 @@ class Config:
             conf['proxy'] = parse_proxy(conf.get('proxy'))
             conf['upstreams'] = [parse_upstream(_) for _ in conf['upstreams'] \
                                     if not isinstance(_, dict) or not _.get('disable', False)]
-        except ValueError as e:
-            raise InvalidConfig(e)
+        except ValueError as exc:
+            raise InvalidConfig(exc)
 
         return cls(conf)
