@@ -93,7 +93,7 @@ class Server:
         logger.debug('DNS service bootstrapping')
         self.host = self.config['host']
         self.port = self.config['port']
-        self.timeout = self.config['timeout']
+        self.timeout_sec = self.config['timeout'] / 1000
         self.upstreams = UpstreamCollection(self.config['upstreams'], 
                                             self.config['secure'])
         self.proxy = self.config['proxy']
@@ -276,7 +276,7 @@ class Server:
                                       **kwargs)
 
     def _get_timeout(self, upstream):
-        return self.timeout if upstream.timeout is None else upstream.timeout
+        return self.timeout_sec if upstream.timeout_sec is None else upstream.timeout_sec
 
     def _get_upstreams(self, **kwargs):
         if 'upstreams' in kwargs:
