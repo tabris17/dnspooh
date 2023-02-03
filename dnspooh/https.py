@@ -407,7 +407,7 @@ class Server:
         logger.debug('Connection from %s:%d' % peername)
         while not writer.transport.is_closing():
             try:
-                request = await asyncio.wait_for(self._read_request(reader), self.timeout)
+                request = await asyncio.wait_for(self._read_request(reader), self.timeout_sec)
                 logger.debug('Request received from "%s:%d": %s', *peername, request)
                 response = await self._respond(writer, await self.on_request(request))
                 logger.debug('Response sent to "%s:%d": %s', *peername, response)
@@ -436,7 +436,7 @@ class Server:
         port = int(http_config['port'])
         if host != '127.0.0.1' and host != 'localhost':
             logger.warn('HTTP server host %s is not safe', host)
-        self.timeout = http_config['timeout']
+        self.timeout_sec = http_config['timeout'] / 1000
         self._server = await asyncio.start_server(self.on_connect, host, port)
         logger.info('HTTP serivce started')
         logger.info('HTTP server is available at http://%s:%d/', host, port)
