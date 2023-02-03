@@ -58,7 +58,7 @@ options:
                         config file path (example "config.yml")
   -u servers [servers ...], --upstream servers [servers ...]
                         space-separated upstream DNS servers list
-  -t ms, --timeout ms   milliseconds for upstream DNS response timeout (default 5 ms)
+  -t ms, --timeout ms   milliseconds for upstream DNS response timeout (default 5000 ms)
   -h host, --host host  local DNS proxy server listening host (default "0.0.0.0")
   -p port, --port port  local DNS proxy server listening port (default "53")
   -D, --debug           display debug message
