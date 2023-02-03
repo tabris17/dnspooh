@@ -62,6 +62,8 @@ async def startup():
         await asyncio.gather(dns_server.run(), http_server.run())
     except asyncio.CancelledError:
         logger.info('Exit')
+    except InvalidConfig as exc:
+        logger.error('Invalid config: %s', exc)
     except Exception as exc:
         if debug:
             raise
