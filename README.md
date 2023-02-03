@@ -97,22 +97,25 @@ middlewares:
 
 配置文件支持 `!path` 和 `!include` 两个扩展指令。当配置项目是一个文件名时，使用 `!path` 指令表示以当前配置文件所在路径作为文件相对路径的起始位置，如果不使用 `!path` 指令，则以程序运行路径作为文件相对路径的起始位置。 `!include` 指令用来引用外部 yaml 配置文件，当前配置文件的所在路径作为被引用配置文件相对路径的起始位置。
 
-| 配置名         | 数据类型 | 默认      | 描述                                                         |
-| -------------- | -------- | --------- | ------------------------------------------------------------ |
-| debug          | Boolean  | false     | 控制台/终端是否输出调试信息                                  |
-| host           | String   | "0.0.0.0" | 服务绑定本机地址                                             |
-| port           | Integer  | 53        | 服务绑定本机端口                                             |
-| geoip          | String   |           | GeoIP2 数据库文件路径。默认使用 [GeoIP2-CN](https://github.com/Hackl0us/GeoIP2-CN) |
-| secure         | Boolean  | true      | 仅使用安全（DoH/DoT）的上游 DNS 服务器                       |
-| timeout        | Float    | 5.0       | 上游 DNS 服务器响应超时时间（单位：秒）                      |
-| proxy          | String   |           | 代理服务器，支持 HTTP 和 SOCKS5 代理                         |
-| middlewares    | Array    | ["cache"] | 启用的中间件。列表定义顺序决定加载顺序                       |
-| rules          | Array    |           | 自定义规则列表                                               |
-| hosts          | Array    |           | hosts 文件列表。支持 http/https 链接                         |
-| block          | Array    |           | 黑名单文件列表。支持 http/https 链接                         |
-| cache          |          |           | 缓存配置                                                     |
-| cache.max_size | Integer  | 4096      | 最大缓存条目数                                               |
-| cache.ttl      | Integer  | 86400     | 缓存有效期（单位：秒）                                       |
+| 配置名         | 数据类型 | 默认         | 描述                                                         |
+| -------------- | -------- | ------------ | ------------------------------------------------------------ |
+| debug          | Boolean  | false        | 控制台/终端是否输出调试信息                                  |
+| host           | String   | "0.0.0.0"    | 服务绑定本机地址                                             |
+| port           | Integer  | 53           | 服务绑定本机端口                                             |
+| geoip          | String   |              | GeoIP2 数据库文件路径。默认使用 [GeoIP2-CN](https://github.com/Hackl0us/GeoIP2-CN) |
+| secure         | Boolean  | true         | 仅使用安全（DoH/DoT）的上游 DNS 服务器                       |
+| timeout        | Float    | 5.0          | 上游 DNS 服务器响应超时时间（单位：秒）                      |
+| proxy          | String   |              | 代理服务器，支持 HTTP 和 SOCKS5 代理                         |
+| middlewares    | Array    | ["cache"]    | 启用的中间件。列表定义顺序决定加载顺序                       |
+| rules          | Array    |              | 自定义规则列表                                               |
+| hosts          | Array    |              | hosts 文件列表。支持 http/https 链接                         |
+| block          | Array    |              | 黑名单文件列表。支持 http/https 链接                         |
+| cache          |          |              | 缓存配置                                                     |
+| cache.max_size | Integer  | 4096         | 最大缓存条目数                                               |
+| cache.ttl      | Integer  | 86400        | 缓存有效期（单位：秒）                                       |
+| log.path       | String   | "access.log" | 访问日志的文件路径，日志文件为 SQLite3 数据库格式            |
+| log.trace      | Boolean  | true         | 是否记录调试跟踪信息                                         |
+| log.payload    | Boolean  | true         | 是否记录 DNS 请求和响应的数据                                |
 
 Dnspooh 提供下列中间件：
 
@@ -123,6 +126,8 @@ Dnspooh 提供下列中间件：
 3. Block 域名和 IP 地址黑名单
 
 4. Cache 缓存上游服务器的解析结果
+
+5. Log 数据库型日志
 
 这些中间件可以在配置文件中开启。在默认配置下，仅启用 Cache 中间件。中间件采用装饰器模式，先加载的中间件处于封装内层，后加载的中间件处于外层。建议按照本文档中的列表顺序定义。
 
