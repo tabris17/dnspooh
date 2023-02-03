@@ -104,7 +104,7 @@ middlewares:
 | port           | Integer  | 53           | 服务绑定本机端口                                             |
 | geoip          | String   |              | GeoIP2 数据库文件路径。默认使用 [GeoIP2-CN](https://github.com/Hackl0us/GeoIP2-CN) |
 | secure         | Boolean  | true         | 仅使用安全（DoH/DoT）的上游 DNS 服务器                       |
-| timeout        | Float    | 5.0          | 上游 DNS 服务器响应超时时间（单位：秒）                      |
+| timeout        | Integer  | 5000          | 上游 DNS 服务器响应超时时间（单位：毫秒）                      |
 | proxy          | String   |              | 代理服务器，支持 HTTP 和 SOCKS5 代理                         |
 | middlewares    | Array    | ["cache"]    | 启用的中间件。列表定义顺序决定加载顺序                       |
 | rules          | Array    |              | 自定义规则列表                                               |
