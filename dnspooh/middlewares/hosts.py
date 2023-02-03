@@ -68,8 +68,7 @@ class HostsMiddleware(Middleware):
                 raise InvalidConfig('Duplicate hosts file %s' % (filename, ))
         return True
 
-    def __init__(self, next, *filenames):
-        super().__init__(next)
+    def __init__(self, *filenames):
         self.hosts = dict()
         self.files = []
         self.urls = []

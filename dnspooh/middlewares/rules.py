@@ -783,14 +783,12 @@ class RulesMiddleware(Middleware):
             self.after = after
             self.is_ended = is_ended
 
-    def __init__(self, next, *rules):
-        super().__init__(next)
+    def __init__(self, *rules):
         self.if_parser = RuleIfParser()
         self.then_parser = RuleThenParser()
         self.before_parser = RuleBeforeParser()
         self.after_parser = RuleAfterParser()
         self.rules = [self._parse_rule(rule) for rule in rules]
-        self.geoip_reader = self.server.open_geoip()
 
     def _parse_rule(self, rule):
         if 'end' not in rule:
@@ -838,6 +836,12 @@ class RulesMiddleware(Middleware):
         ips = map(lambda r: str(r.rdata), response.rr)
         geoips = map(self._geoip, ips)
         return response, ips, geoips
+
+    @property
+    def geoip_reader(self):
+        if not hasattr(self, '_geoip_reader'):
+            self._geoip_reader = self.server.open_geoip()
+        return self._geoip_reader
 
     async def handle(self, request, **kwargs):
         if request.q.qtype not in (dnslib.QTYPE.AAAA, dnslib.QTYPE.A):
