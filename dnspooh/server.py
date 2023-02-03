@@ -181,9 +181,12 @@ class Server:
         wrapped = self
         names = self.config['middlewares']
         for name in names:
-            wrapped = middlewares.create_middleware(
-                name, wrapped, self.config.get(name)
-            )
+            try:
+                wrapped = middlewares.create_middleware(
+                    name, wrapped, self.config.get(name)
+                )
+            except TypeError as exc:
+                raise InvalidConfig(exc)
             logger.info('%s loaded', wrapped.__class__.__name__)
         return wrapped
 
@@ -282,18 +285,18 @@ class Server:
             upstream_name = kwargs['upstream_name']
             if upstream_name in self.upstreams:
                 return list(self.upstreams[upstream_name])
-            logger.error('Upstream name %s not defined', upstream_name)
+            logger.warning('Upstream name %s not defined', upstream_name)
         elif 'upstream_group' in kwargs:
             upstream_group = kwargs['upstream_group']
             if self.upstreams.has_group(upstream_group):
                 return self.upstreams.group(upstream_group)
-            logger.error('Upstream group %s not defined', upstream_name)
+            logger.warning('Upstream group %s not defined', upstream_group)
         return self.upstreams.sorted()
 
     async def handle(self, request, **kwargs):
         logger.debug('DNS query:\n%s', request)
-        data = DNSRecord.pack(request)
-        
+        data = request.pack()
+
         for upstream in self._get_upstreams(**kwargs):
             proxy = self._get_proxy(upstream, **kwargs)
             if upstream.disable: continue
@@ -353,7 +356,7 @@ class Server:
 
         logger.debug('Send response to %s:%d\n%s' % (addr + (response, )))
         try:
-            self.transport.sendto(DNSRecord.pack(response), addr)
+            self.transport.sendto(response.pack(), addr)
         except Exception:
             logger.warning('Failed to send data to %s:%d' % addr)
 
