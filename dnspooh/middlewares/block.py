@@ -66,8 +66,7 @@ class BlockMiddleware(Middleware):
             await self.load_config(filename)
         return True
 
-    def __init__(self, next, *filenames):
-        super().__init__(next)
+    def __init__(self, *filenames):
         self.blacklists = dict()
         self.filenames = filenames
 
