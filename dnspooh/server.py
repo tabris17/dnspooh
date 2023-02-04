@@ -34,7 +34,7 @@ class ServerProtocol(asyncio.DatagramProtocol):
         self.need_restart = False
 
     def datagram_received(self, data, addr):
-        self.server.on_request(data, addr)
+        self.server.on_request(self.transport, data, addr)
 
     def error_received(self, exc):
         if isinstance(exc, OSError):
@@ -42,13 +42,16 @@ class ServerProtocol(asyncio.DatagramProtocol):
         else:
             logger.info('DNS server error received: %s', exc)
         self.need_restart = True
-        self.server.transport.abort()
+        self.transport.abort()
 
     def connection_lost(self, exc):
         super().connection_lost(exc)
         if self.need_restart:
             self.need_restart = False
-            self.server.on_error_restart()
+            self.server.on_error(self.transport)
+
+    def connection_made(self, transport):
+        self.transport = transport
 
 
 class QueryProtocol(asyncio.DatagramProtocol):
@@ -84,10 +87,10 @@ class Server:
         self.loop = asyncio.get_running_loop() if loop is None else loop
         self.abort_event = asyncio.Event()
         self.middlewares = self._create_middlewares()
-        self.transport = None
         self.stats = Stats(config['stats.max_size'])
         self.status = self.Status.initialized
         self.tasks = []
+        self.transports = []
         logger.debug('DNS serivce initialized')
 
     async def bootstrap(self):
@@ -351,7 +354,7 @@ class Server:
             return response
         return await resolver.handle(request)
 
-    def on_response(self, request, addr, future):
+    def on_response(self, transport, request, addr, future):
         response = future.result()
         if response is None:
             logger.info('Failed to resolve domain name "%s", upstream servers are unreachable', request.q.qname)
@@ -359,39 +362,38 @@ class Server:
 
         logger.debug('Send response to %s\n%s', s_addr(addr), response)
         try:
-            self.transport.sendto(response.pack(), addr)
+            transport.sendto(response.pack(), addr)
         except Exception:
             logger.warning('Failed to send data to %s', s_addr(addr))
 
-    def on_request(self, data, addr):
+    def on_request(self, transport, data, addr):
         request = DNSRecord.parse(data)
         logger.debug('Received request from %s\n%s', s_addr(addr), request)
         task = self.loop.create_task(self._handle(request))
-        task.add_done_callback(functools.partial(self.on_response, request, addr))
+        task.add_done_callback(functools.partial(self.on_response, transport, request, addr))
 
     def abort(self):
         self.status = self.Status.stop_pedding
         logger.info('DNS serivce aborted')
         return self.abort_event.set()
 
-    async def reload(self):
-        # TODO: 
-        pass
-
     async def restart(self, silent=False):
         self.status = self.Status.restart_pedding
         if not silent: logger.info('Restarting service')
-        self.transport, _ = await self.loop.create_datagram_endpoint(
-            lambda: ServerProtocol(self),
-            local_addr=(self.host, self.port)
-        )
+        # TODO:
         self.status = self.Status.running
         if not silent: logger.info('DNS service restarted')
 
-    def on_error_restart(self):
-        if self.status != self.Status.running:
-            return
-        return self.loop.create_task(self.restart(True))
+    def on_error(self, transport):
+        self.transports.remove(transport)
+        sockname = transport.get_extra_info('sockname')
+        async def restart(sockname):
+            transport, _ = await self.loop.create_datagram_endpoint(
+                lambda: ServerProtocol(self),
+                local_addr=sockname
+            )
+            self.transports.append(transport) 
+        return self.loop.create_task(restart(sockname))
 
     async def run(self):
         self.status = self.Status.start_pedding
@@ -399,10 +401,11 @@ class Server:
             logger.error('Failed to bootstrap')
             return
         try:
-            self.transport, _ = await self.loop.create_datagram_endpoint(
+            transport, _ = await self.loop.create_datagram_endpoint(
                 lambda: ServerProtocol(self),
                 local_addr=(self.host, self.port)
             )
+            self.transports.append(transport)
         except OSError as exc:
             logger.error('Failed to start DNS service: %s', exc)
             return
@@ -415,7 +418,8 @@ class Server:
         except asyncio.CancelledError:
             logger.debug('DNS serivce interrupted')
         finally:
-            self.transport.close()
+            for transport in self.transports:
+                transport.close()
             self.status = self.Status.stopped
             logger.info('DNS serivce stopped')
 
