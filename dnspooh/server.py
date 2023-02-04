@@ -21,6 +21,7 @@ from .exceptions import *
 from .stats import Stats
 from .upstream import UpstreamCollection
 from .proxy import parse_proxy
+from .helpers import s_addr
 
 
 logger = logging.getLogger(__name__)
@@ -265,7 +266,7 @@ class Server:
                 response_size = struct.unpack('!H', response_head)[0]
                 return await conn.reader.readexactly(response_size)
         except asyncio.exceptions.IncompleteReadError:
-            logger.error('Failed to read data from %s:%d', upstream.host, upstream.port)
+            logger.error('Failed to read data from %s', upstream.name)
         except ConnectionError as exc:
             logger.warning('Failed to connect to %s: %s', upstream.name, exc)
 
@@ -307,7 +308,9 @@ class Server:
             elif isinstance(upstream, TlsUpstream):
                 resolver = self._resolve_by_tls
             else:
-                raise NotImplementedError('Unspported upstream')
+                raise TypeError('Invalid upstream type: %s' % (type(upstream).__name__, ))
+            if 'traceback' in kwargs:
+                kwargs['traceback'].append(upstream.name)
 
             try:
                 with self.stats.record(upstream):
@@ -354,15 +357,15 @@ class Server:
             logger.info('Failed to resolve domain name "%s", upstream servers are unreachable', request.q.qname)
             return
 
-        logger.debug('Send response to %s:%d\n%s' % (addr + (response, )))
+        logger.debug('Send response to %s\n%s', s_addr(addr), response)
         try:
             self.transport.sendto(response.pack(), addr)
         except Exception:
-            logger.warning('Failed to send data to %s:%d' % addr)
+            logger.warning('Failed to send data to %s', s_addr(addr))
 
     def on_request(self, data, addr):
         request = DNSRecord.parse(data)
-        logger.debug('Received request from %s:%d\n%s' % (addr + (request, )))
+        logger.debug('Received request from %s\n%s', s_addr(addr), request)
         task = self.loop.create_task(self._handle(request))
         task.add_done_callback(functools.partial(self.on_response, request, addr))
 

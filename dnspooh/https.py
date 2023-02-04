@@ -19,6 +19,7 @@ from urllib.parse import urlencode, urlsplit, parse_qs, quote
 
 from .scheme import Scheme
 from .exceptions import HttpException, HttpHeaderTooLarge, HttpPayloadTooLarge, HttpNotFound, InvalidConfig
+from .helpers import s_addr
 
 
 HTTP_VERSION = 'HTTP/1.1'
@@ -404,13 +405,13 @@ class Server:
 
     async def on_connect(self, reader, writer):
         peername = writer.transport.get_extra_info('peername')
-        logger.debug('Connection from %s:%d' % peername)
+        logger.debug('Connection from %s', s_addr(peername))
         while not writer.transport.is_closing():
             try:
                 request = await asyncio.wait_for(self._read_request(reader), self.timeout_sec)
-                logger.debug('Request received from "%s:%d": %s', *peername, request)
+                logger.debug('Request received from "%s": %s', s_addr(peername), request)
                 response = await self._respond(writer, await self.on_request(request))
-                logger.debug('Response sent to "%s:%d": %s', *peername, response)
+                logger.debug('Response sent to "%s": %s', s_addr(peername), response)
             except HttpException:
                 await self._respond(writer, await self.on_error(400))
                 writer.transport.close()
