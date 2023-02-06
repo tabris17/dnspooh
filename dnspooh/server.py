@@ -21,6 +21,7 @@ from .exceptions import *
 from .stats import Stats
 from .upstream import UpstreamCollection
 from .proxy import parse_proxy
+from .helpers import s_addr
 
 
 logger = logging.getLogger(__name__)
@@ -33,7 +34,7 @@ class ServerProtocol(asyncio.DatagramProtocol):
         self.need_restart = False
 
     def datagram_received(self, data, addr):
-        self.server.on_request(data, addr)
+        self.server.on_request(self.transport, data, addr)
 
     def error_received(self, exc):
         if isinstance(exc, OSError):
@@ -41,13 +42,16 @@ class ServerProtocol(asyncio.DatagramProtocol):
         else:
             logger.info('DNS server error received: %s', exc)
         self.need_restart = True
-        self.server.transport.abort()
+        self.transport.abort()
 
     def connection_lost(self, exc):
         super().connection_lost(exc)
         if self.need_restart:
             self.need_restart = False
-            self.server.on_error_restart()
+            self.server.on_error(self.transport)
+
+    def connection_made(self, transport):
+        self.transport = transport
 
 
 class QueryProtocol(asyncio.DatagramProtocol):
@@ -83,17 +87,17 @@ class Server:
         self.loop = asyncio.get_running_loop() if loop is None else loop
         self.abort_event = asyncio.Event()
         self.middlewares = self._create_middlewares()
-        self.transport = None
         self.stats = Stats(config['stats.max_size'])
         self.status = self.Status.initialized
         self.tasks = []
+        self.transports = []
         logger.debug('DNS serivce initialized')
 
     async def bootstrap(self):
         logger.debug('DNS service bootstrapping')
         self.host = self.config['host']
         self.port = self.config['port']
-        self.timeout = self.config['timeout']
+        self.timeout_sec = self.config['timeout'] / 1000
         self.upstreams = UpstreamCollection(self.config['upstreams'], 
                                             self.config['secure'])
         self.proxy = self.config['proxy']
@@ -136,14 +140,14 @@ class Server:
         async def test_upstream(upstream):
             start_counter = time.perf_counter()
             response = await self.handle(request, upstreams=[upstream])
-            cost_time = time.perf_counter() - start_counter
+            elapsed_time_sec = time.perf_counter() - start_counter
             if not response or response.header.a == 0:
                 upstream.disable = True
                 upstream.priority = -1
                 logger.warning('Test upstream %s failed', upstream.name)
             else:
-                timeout = self._get_timeout(upstream)
-                upstream.priority = int(max(0, timeout - cost_time) / timeout * 1000)
+                timeout_sec = self._get_timeout(upstream)
+                upstream.priority = int(max(0, timeout_sec - elapsed_time_sec) / timeout_sec * 1000)
                 logger.info('Test upstream %s passed, responding speed: %d', upstream.name, upstream.priority)
 
         await asyncio.gather(*[test_upstream(_) for _ in self.upstreams.all() if not _.disable])
@@ -265,7 +269,7 @@ class Server:
                 response_size = struct.unpack('!H', response_head)[0]
                 return await conn.reader.readexactly(response_size)
         except asyncio.exceptions.IncompleteReadError:
-            logger.error('Failed to read data from %s:%d', upstream.host, upstream.port)
+            logger.error('Failed to read data from %s', upstream.name)
         except ConnectionError as exc:
             logger.warning('Failed to connect to %s: %s', upstream.name, exc)
 
@@ -276,7 +280,7 @@ class Server:
                                       **kwargs)
 
     def _get_timeout(self, upstream):
-        return self.timeout if upstream.timeout is None else upstream.timeout
+        return self.timeout_sec if upstream.timeout_sec is None else upstream.timeout_sec
 
     def _get_upstreams(self, **kwargs):
         if 'upstreams' in kwargs:
@@ -307,7 +311,9 @@ class Server:
             elif isinstance(upstream, TlsUpstream):
                 resolver = self._resolve_by_tls
             else:
-                raise NotImplementedError('Unspported upstream')
+                raise TypeError('Invalid upstream type: %s' % (type(upstream).__name__, ))
+            if 'traceback' in kwargs:
+                kwargs['traceback'].append(upstream.name)
 
             try:
                 with self.stats.record(upstream):
@@ -348,47 +354,46 @@ class Server:
             return response
         return await resolver.handle(request)
 
-    def on_response(self, request, addr, future):
+    def on_response(self, transport, request, addr, future):
         response = future.result()
         if response is None:
             logger.info('Failed to resolve domain name "%s", upstream servers are unreachable', request.q.qname)
             return
 
-        logger.debug('Send response to %s:%d\n%s' % (addr + (response, )))
+        logger.debug('Send response to %s\n%s', s_addr(addr), response)
         try:
-            self.transport.sendto(response.pack(), addr)
+            transport.sendto(response.pack(), addr)
         except Exception:
-            logger.warning('Failed to send data to %s:%d' % addr)
+            logger.warning('Failed to send data to %s', s_addr(addr))
 
-    def on_request(self, data, addr):
+    def on_request(self, transport, data, addr):
         request = DNSRecord.parse(data)
-        logger.debug('Received request from %s:%d\n%s' % (addr + (request, )))
+        logger.debug('Received request from %s\n%s', s_addr(addr), request)
         task = self.loop.create_task(self._handle(request))
-        task.add_done_callback(functools.partial(self.on_response, request, addr))
+        task.add_done_callback(functools.partial(self.on_response, transport, request, addr))
 
     def abort(self):
         self.status = self.Status.stop_pedding
         logger.info('DNS serivce aborted')
         return self.abort_event.set()
 
-    async def reload(self):
-        # TODO: 
-        pass
-
     async def restart(self, silent=False):
         self.status = self.Status.restart_pedding
         if not silent: logger.info('Restarting service')
-        self.transport, _ = await self.loop.create_datagram_endpoint(
-            lambda: ServerProtocol(self),
-            local_addr=(self.host, self.port)
-        )
+        # TODO:
         self.status = self.Status.running
         if not silent: logger.info('DNS service restarted')
 
-    def on_error_restart(self):
-        if self.status != self.Status.running:
-            return
-        return self.loop.create_task(self.restart(True))
+    def on_error(self, transport):
+        self.transports.remove(transport)
+        sockname = transport.get_extra_info('sockname')
+        async def restart(sockname):
+            transport, _ = await self.loop.create_datagram_endpoint(
+                lambda: ServerProtocol(self),
+                local_addr=sockname
+            )
+            self.transports.append(transport) 
+        return self.loop.create_task(restart(sockname))
 
     async def run(self):
         self.status = self.Status.start_pedding
@@ -396,10 +401,11 @@ class Server:
             logger.error('Failed to bootstrap')
             return
         try:
-            self.transport, _ = await self.loop.create_datagram_endpoint(
+            transport, _ = await self.loop.create_datagram_endpoint(
                 lambda: ServerProtocol(self),
                 local_addr=(self.host, self.port)
             )
+            self.transports.append(transport)
         except OSError as exc:
             logger.error('Failed to start DNS service: %s', exc)
             return
@@ -412,7 +418,8 @@ class Server:
         except asyncio.CancelledError:
             logger.debug('DNS serivce interrupted')
         finally:
-            self.transport.close()
+            for transport in self.transports:
+                transport.close()
             self.status = self.Status.stopped
             logger.info('DNS serivce stopped')
 

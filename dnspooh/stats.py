@@ -23,7 +23,7 @@ class Stats:
             self.upstream = upstream
 
         def __enter__(self):
-            self.start_time = time.time()
+            self.start_time = time.perf_counter()
             return self
 
         def __exit__(self, exc_type, exc_value, traceback):
@@ -41,7 +41,7 @@ class Stats:
                 else:
                     self.result = self.Result.error
 
-            self.cost_time = time.time() - self.start_time
+            self.elapsed_time_sec = time.perf_counter() - self.start_time
             self.stats.records.append(self)
             del self.stats
 
@@ -52,7 +52,7 @@ class Stats:
             return {
                 'upstream': self.upstream.name,
                 'start_time': self.start_time,
-                'cost_time': self.cost_time,
+                'elapsed_time': self.elapsed_time_sec,
             }
 
     def __init__(self, maxlen):

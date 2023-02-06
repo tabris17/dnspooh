@@ -5,6 +5,7 @@ import ipaddress
 from urllib.parse import urlsplit
 
 from .scheme import Scheme
+from .helpers import s_addr
 
 
 DEFAULT_HTTP_PROXY_PORT = 8080
@@ -87,7 +88,7 @@ class Socks5Proxy(Proxy):
             else:
                 raise ValueError('Invalid ATYPE %d received' % atype)
             if from_addr != src_addr:
-                raise ValueError('Source address %s:%d does not match' % from_addr)
+                raise ValueError('Source address %s does not match' % s_addr(from_addr))
 
             return entity_data
 
@@ -168,13 +169,13 @@ class Socks5Proxy(Proxy):
                 dst_port
             ))
         else:
-            raise ValueError('Invalid remote address "%s:%d"' % remote_addr)
+            raise ValueError('Invalid remote address "%s"' % (s_addr(remote_addr), ))
 
         await writer.drain()
         _, rep, _, atype,  = struct.unpack('!4B', await reader.readexactly(4))
 
         if rep != self.REP_SUCCESS:
-            raise ConnectionError('Failed to connection remote address "%s:%d"' % remote_addr)
+            raise ConnectionError('Failed to connection remote address "%s"' % (s_addr(remote_addr), ))
 
         if atype == self.ATYP_IPV4:
             bind_addr, bind_port = struct.unpack('!4sH', await reader.readexactly(6))
