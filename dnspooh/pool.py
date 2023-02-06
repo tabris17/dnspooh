@@ -173,8 +173,8 @@ class Pool:
         return conn
         
     def dispose(self):
-        pass
-        # TODO:
+        for conn in self.conns.values():
+            conn.abort()
 
 
 def _make_conn_name(host, port, scheme, proxy):
