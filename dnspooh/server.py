@@ -14,17 +14,20 @@ from dnslib import DNSRecord, DNSError, DNSHeader
 
 from . import https
 from . import middlewares
-from .config import DnsUpstream, HttpsUpstream, TlsUpstream
+from .config import DnsUpstream, HttpsUpstream, TlsUpstream, DEFAULT_LISTEN_HOST
 from .pool import Pool
 from .scheme import Scheme
 from .exceptions import *
 from .stats import Stats
-from .upstream import UpstreamCollection
+from .upstream import UpstreamCollection, DEFAULT_DNS_PORT
 from .proxy import parse_proxy
-from .helpers import s_addr
+from .helpers import s_addr, parse_addr
 
 
 logger = logging.getLogger(__name__)
+
+
+_parse_addr = functools.partial(parse_addr, DEFAULT_LISTEN_HOST, DEFAULT_DNS_PORT)
 
 
 class ServerProtocol(asyncio.DatagramProtocol):
@@ -95,8 +98,10 @@ class Server:
 
     async def bootstrap(self):
         logger.debug('DNS service bootstrapping')
-        self.host = self.config['host']
-        self.port = self.config['port']
+        local_addrs = self.config['listen']
+        self.local_addrs = [_parse_addr(local_addrs)] \
+            if isinstance(local_addrs, str) \
+            else [_parse_addr(addr) for addr in local_addrs]
         self.timeout_sec = self.config['timeout'] / 1000
         self.upstreams = UpstreamCollection(self.config['upstreams'], 
                                             self.config['secure'])
@@ -400,15 +405,18 @@ class Server:
         if not await self.middlewares.bootstrap():
             logger.error('Failed to bootstrap')
             return
-        try:
-            transport, _ = await self.loop.create_datagram_endpoint(
-                lambda: ServerProtocol(self),
-                local_addr=(self.host, self.port)
-            )
-            self.transports.append(transport)
-        except OSError as exc:
-            logger.error('Failed to start DNS service: %s', exc)
-            return
+        
+        for local_addr in self.local_addrs:
+            try:
+                transport, _ = await self.loop.create_datagram_endpoint(
+                    lambda: ServerProtocol(self),
+                    local_addr=local_addr
+                )
+                self.transports.append(transport)
+                logger.info('DNS service listening on %s', s_addr(local_addr))
+            except OSError as exc:
+                logger.error('Failed to start DNS service: %s', exc)
+                return
 
         self.status = self.Status.running
         logger.info('DNS serivce started')

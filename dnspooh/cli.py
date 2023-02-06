@@ -22,18 +22,16 @@ def parse_arguments():
 
     parser.add_argument('-c', '--config', metavar='file', dest='config',
                         help='config file path (example "%s")' % (CONFIG_FILE, ))
-    parser.add_argument('-u', '--upstream', metavar='servers', dest='upstreams', nargs='+',
+    parser.add_argument('-u', '--upstream', metavar='dns_server', dest='upstreams', nargs='+',
                         help='space-separated upstream DNS servers list')
     parser.add_argument('-t', '--timeout', metavar='ms', dest='timeout', type=int, 
                         help='milliseconds for upstream DNS response timeout (default %d ms)' % (UPSTREAM_TIMEOUT, ))
-    parser.add_argument('-h', '--host', metavar='host', dest='host', 
-                        help='local DNS proxy server listening host (default "%s")' % (LISTEN_HOST, ))
-    parser.add_argument('-p', '--port', metavar='port', dest='port', type=int, 
-                        help='local DNS proxy server listening port (default "%s")' % (DEFAULT_DNS_PORT, ))
+    parser.add_argument('-l', '--listen', metavar='addr', dest='listen', nargs='+', 
+                        help='binding to local address and port for DNS proxy server (default "%s:%d")' % (LISTEN_ADDRESS, DEFAULT_DNS_PORT))
     parser.add_argument('-D', '--debug', action='store_true', help='display debug message')
     parser.add_argument('-d', '--dump', action='store_true', default=False, help='dump pretty config data')
     parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + __version__)
-    parser.add_argument('--help', action='help', help='show this help message and exit')
+    parser.add_argument('-h', '--help', action='help', help='show this help message and exit')
 
     return parser.parse_args(sys.argv[1:])
 

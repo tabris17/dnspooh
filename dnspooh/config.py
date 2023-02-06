@@ -14,7 +14,9 @@ from .exceptions import InvalidConfig
 
 CONFIG_FILE = 'config.yml'
 
-LISTEN_HOST = '0.0.0.0'
+DEFAULT_LISTEN_HOST = '0.0.0.0'
+
+LISTEN_ADDRESS = '%s:%d' % (DEFAULT_LISTEN_HOST, DEFAULT_DNS_PORT)
 
 UPSTREAM_TIMEOUT = 5000
 
@@ -422,8 +424,7 @@ BUILTIN_UPSTREAMS = [
 DEFAULT_CONFIG = {
     'secure': True,
     'debug': False,
-    'host': LISTEN_HOST,
-    'port': DEFAULT_DNS_PORT,
+    'listen': LISTEN_ADDRESS,
     'timeout': UPSTREAM_TIMEOUT,
     'upstreams': BUILTIN_UPSTREAMS,
     'proxy': None,
@@ -479,11 +480,8 @@ def _load_from_args(args):
     if args.debug is not None:
         conf['debug'] = args.debug
 
-    if args.host is not None:
-        conf['host'] = args.host
-
-    if args.port is not None:
-        conf['port'] = args.port
+    if args.listen is not None:
+        conf['listen'] = args.listen
 
     if args.timeout is not None:
         conf['timeout'] = args.timeout
