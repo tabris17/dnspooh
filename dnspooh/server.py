@@ -21,13 +21,10 @@ from .exceptions import *
 from .stats import Stats
 from .upstream import UpstreamCollection, DEFAULT_DNS_PORT
 from .proxy import parse_proxy
-from .helpers import s_addr, parse_addr
+from .helpers import s_addr
 
 
 logger = logging.getLogger(__name__)
-
-
-_parse_addr = functools.partial(parse_addr, DEFAULT_LISTEN_HOST, DEFAULT_DNS_PORT)
 
 
 class ServerProtocol(asyncio.DatagramProtocol):
@@ -98,10 +95,7 @@ class Server:
 
     async def bootstrap(self):
         logger.debug('DNS service bootstrapping')
-        local_addrs = self.config['listen']
-        self.local_addrs = [_parse_addr(local_addrs)] \
-            if isinstance(local_addrs, str) \
-            else [_parse_addr(addr) for addr in local_addrs]
+        self.local_addrs = self.config['listen']
         self.timeout_sec = self.config['timeout'] / 1000
         self.upstreams = UpstreamCollection(self.config['upstreams'], 
                                             self.config['secure'])

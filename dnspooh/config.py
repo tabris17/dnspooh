@@ -10,6 +10,7 @@ except ImportError:
 from .upstream import *
 from .proxy import *
 from .exceptions import InvalidConfig
+from .helpers import parse_addr
 
 
 CONFIG_FILE = 'config.yml'
@@ -455,6 +456,9 @@ DEFAULT_CONFIG = {
 logger = logging.getLogger(__name__)
 
 
+_parse_addr = functools.partial(parse_addr, DEFAULT_LISTEN_HOST, DEFAULT_DNS_PORT)
+
+
 def _load_from_file(file_path):
     if not file_path.is_file():
         raise FileNotFoundError('Cannot load config file "%s"' % (file_path.absolute(), ))
@@ -573,6 +577,12 @@ class Config:
             conf['proxy'] = parse_proxy(conf.get('proxy'))
             conf['upstreams'] = [parse_upstream(_) for _ in conf['upstreams'] \
                                     if not isinstance(_, dict) or not _.get('disable', False)]
+
+            listen_addrs = conf['listen']
+            if isinstance(listen_addrs, str):
+                conf['listen'] = [_parse_addr(listen_addrs)]
+            else:
+                conf['listen'] = [_parse_addr(addr) for addr in listen_addrs]
         except ValueError as exc:
             raise InvalidConfig(exc)
 
