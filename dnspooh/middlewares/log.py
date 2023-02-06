@@ -14,6 +14,7 @@ CREATE_DATABASE_SQL = \
 '''CREATE TABLE IF NOT EXISTS "log" (
     "id"            INTEGER,
     "created_at"    TEXT,
+    "elapsed_time"  REAL,
     "qname"         TEXT,
     "qtype"         TEXT,
     "success"       INTEGER,
@@ -27,16 +28,16 @@ CREATE_DATABASE_SQL = \
 
 INSERT_FAILURE_SQL = \
 '''INSERT INTO "log" 
-    (created_at, qname, qtype, success, request, error, traceback) 
+    (created_at, elapsed_time, qname, qtype, success, request, error, traceback) 
     VALUES 
-    (:now, :qname, :qtype, :success, :request, :error, :traceback)
+    (:now, :elapsed_time, :qname, :qtype, :success, :request, :error, :traceback)
 '''
 
 INSERT_SUCCESS_SQL = \
 '''INSERT INTO "log" 
-    (created_at, qname, qtype, success, request, response, traceback) 
+    (created_at, elapsed_time, qname, qtype, success, request, response, traceback) 
     VALUES 
-    (:now, :qname, :qtype, :success, :request, :response, :traceback)
+    (:now, :elapsed_time, :qname, :qtype, :success, :request, :response, :traceback)
 '''
 
 
@@ -68,16 +69,21 @@ class LogMiddleware(Middleware):
             'traceback': traceback,
         }
 
+        start_counter = time.perf_counter()
         try:
             response = await super().handle(request, **kwargs)
         except Exception as exc:
-            params |= {'success': False, 'error': str(exc)}
+            params |= {'success': False, 'error': str(exc), 'elapsed_time': time.perf_counter() - start_counter}
             with self._open_db() as db: db.execute(INSERT_FAILURE_SQL, params)
             raise
         if response is None:
-            params |= {'success': False, 'error': 'N/A'}
+            params |= {'success': False, 'error': 'N/A', 'elapsed_time': time.perf_counter() - start_counter}
             with self._open_db() as db: db.execute(INSERT_FAILURE_SQL, params)
         else:
-            params |= {'success': True, 'response': response.pack() if self.payload else None}
+            params |= {
+                'success': True, 
+                'response': response.pack() if self.payload else None, 
+                'elapsed_time': time.perf_counter() - start_counter
+            }
             with self._open_db() as db: db.execute(INSERT_SUCCESS_SQL, params)
         return response
