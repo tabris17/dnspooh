@@ -68,6 +68,12 @@ class Connection:
     def udp_tunnel_enabled(self):
         return self.udp_tunnel is not None
 
+    def close(self):
+        return self.writer.transport.close()
+
+    def abort(self):
+        return self.writer.transport.abort()
+
 
 class Pool:
     DEFAULT_LIMIT = 2 ** 16
@@ -121,7 +127,7 @@ class Pool:
     async def connect(self, host, port, 
                       scheme=Scheme.tcp, proxy=None, 
                       limit=DEFAULT_LIMIT, pooled=True, **kwds):
-        conn_name = self._make_conn_name(host, port, scheme, proxy)
+        conn_name = _make_conn_name(host, port, scheme, proxy)
         conn = self.get(conn_name)
         if conn:
             return conn
@@ -165,8 +171,12 @@ class Pool:
         conn = Connection(conn_name, reader, writer)
         if pooled: self.add(conn)
         return conn
+        
+    def dispose(self):
+        pass
+        # TODO:
 
-    @staticmethod
-    def _make_conn_name(host, port, scheme, proxy):
-        name = '%s://%s:%d' % (scheme.name, host, port)
-        return name if proxy is None else '%s/%s' % (proxy.url, name)
+
+def _make_conn_name(host, port, scheme, proxy):
+    name = '%s://%s:%d' % (scheme.name, host, port)
+    return name if proxy is None else '%s/%s' % (proxy.url, name)
