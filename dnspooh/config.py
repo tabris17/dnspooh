@@ -42,6 +42,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'cloudflare',
             'global',
+            'ipv4',
         ]
     },
     {
@@ -52,6 +53,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'cloudflare',
             'global',
+            'ipv4',
         ],
     },
     {
@@ -62,6 +64,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'cloudflare',
             'global',
+            'ipv6',
         ],
     },
     {
@@ -72,6 +75,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'cloudflare',
             'global',
+            'ipv6',
         ],
     },
     {
@@ -82,6 +86,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'cloudflare',
             'global',
+            'ipv4',
         ],
         'priority': 1,
     },
@@ -92,6 +97,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'cloudflare',
             'global',
+            'ipv4',
         ],
     },{
         'name': 'google-1',
@@ -101,6 +107,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'google',
             'global',
+            'ipv4',
         ],
     },
     {
@@ -111,6 +118,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'google',
             'global',
+            'ipv4',
         ],
     },
     {
@@ -121,6 +129,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'google',
             'global',
+            'ipv4',
         ],
     },
     {
@@ -140,6 +149,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'alidns',
             'cn',
+            'ipv4',
         ],
     },
     {
@@ -150,6 +160,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'alidns',
             'cn',
+            'ipv4',
         ],
     },
     {
@@ -160,6 +171,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'alidns',
             'cn',
+            'ipv6',
         ],
     },
     {
@@ -170,6 +182,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'alidns',
             'cn',
+            'ipv6',
         ],
     },
     {
@@ -199,6 +212,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             '114dns',
             'cn',
+            'ipv4',
         ],
     },
     {
@@ -209,6 +223,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             '114dns',
             'cn',
+            'ipv4',
         ],
     },
     {
@@ -219,6 +234,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'onedns',
             'cn',
+            'ipv4',
         ],
     },
     {
@@ -229,6 +245,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'onedns',
             'cn',
+            'ipv4',
         ],
     },
     {
@@ -239,6 +256,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'onedns',
             'cn',
+            'ipv6',
         ],
     },
     {
@@ -249,6 +267,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'onedns',
             'cn',
+            'ipv6',
         ],
     },
     {
@@ -259,6 +278,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'dnspod',
             'cn',
+            'ipv4',
         ],
     },
     {
@@ -269,6 +289,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'dnspod',
             'cn',
+            'ipv4',
         ],
     },
     {
@@ -279,6 +300,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'dnspod',
             'cn',
+            'ipv4',
         ],
     },
     {
@@ -300,6 +322,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'dnspod',
             'cn',
+            'ipv6',
         ],
     },
     {
@@ -309,6 +332,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'dnspod',
             'cn',
+            'ipv4',
         ],
     },
     {
@@ -318,6 +342,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'dnspod',
             'cn',
+            'ipv4',
         ],
     },
     {
@@ -338,6 +363,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'baidu',
             'cn',
+            'ipv4',
         ],
     },
     {
@@ -348,6 +374,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'baidu',
             'cn',
+            'ipv6',
         ],
     },
     {
@@ -358,6 +385,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'opendns',
             'global',
+            'ipv4',
         ],
     },
     {
@@ -368,6 +396,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'opendns',
             'global',
+            'ipv4',
         ],
     },
     {
@@ -378,6 +407,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'adguard',
             'global',
+            'ipv4',
         ],
     },
     {
@@ -388,6 +418,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'adguard',
             'global',
+            'ipv4',
         ],
     },
     {
@@ -398,6 +429,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'adguard',
             'global',
+            'ipv6',
         ],
     },
     {
@@ -408,6 +440,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'adguard',
             'global',
+            'ipv6',
         ],
     },
     {
@@ -575,8 +608,28 @@ class Config:
 
         try:
             conf['proxy'] = parse_proxy(conf.get('proxy'))
-            conf['upstreams'] = [parse_upstream(_) for _ in conf['upstreams'] \
-                                    if not isinstance(_, dict) or not _.get('disable', False)]
+            if 'upstreams+' in conf:
+                conf['upstreams'].extend(conf['upstreams+'])
+                del conf['upstreams+']
+
+            upstreams = map(parse_upstream, conf['upstreams'])
+            if 'upstreams_filter' in conf:
+                upstreams_filter = conf['upstreams_filter']
+                del conf['upstreams_filter']
+
+                def _filter_upstream(upstream):
+                    if upstream.disable:
+                        return False
+                    if 'name' in upstreams_filter and upstream.name in upstreams_filter['name']:
+                        return True
+                    if 'group' in upstreams_filter:
+                        for group_name in upstream.groups:
+                            if group_name in upstreams_filter['group']:
+                                return True
+                    return False
+            else:
+                _filter_upstream = lambda _: not _.disable
+            conf['upstreams'] = list(filter(_filter_upstream, upstreams))
 
             listen_addrs = conf['listen']
             if isinstance(listen_addrs, str):
