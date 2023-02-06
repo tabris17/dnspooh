@@ -422,6 +422,7 @@ class Server:
         finally:
             for transport in self.transports:
                 transport.close()
+            self.pool.dispose()
             self.status = self.Status.stopped
             logger.info('DNS serivce stopped')
 
