@@ -10,15 +10,18 @@ except ImportError:
 from .upstream import *
 from .proxy import *
 from .exceptions import InvalidConfig
+from .helpers import parse_addr
 
 
 CONFIG_FILE = 'config.yml'
 
-LISTEN_HOST = '0.0.0.0'
+DEFAULT_LISTEN_HOST = '0.0.0.0'
 
-UPSTREAM_TIMEOUT = 5
+LISTEN_ADDRESS = '%s:%d' % (DEFAULT_LISTEN_HOST, DEFAULT_DNS_PORT)
 
-HTTP_TIMEOUT = 10
+UPSTREAM_TIMEOUT = 5000
+
+HTTP_TIMEOUT = 10000
 
 HTTP_HOST = '127.0.0.1'
 
@@ -39,6 +42,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'cloudflare',
             'global',
+            'ipv4',
         ]
     },
     {
@@ -49,6 +53,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'cloudflare',
             'global',
+            'ipv4',
         ],
     },
     {
@@ -59,6 +64,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'cloudflare',
             'global',
+            'ipv6',
         ],
     },
     {
@@ -69,6 +75,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'cloudflare',
             'global',
+            'ipv6',
         ],
     },
     {
@@ -79,6 +86,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'cloudflare',
             'global',
+            'ipv4',
         ],
         'priority': 1,
     },
@@ -89,6 +97,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'cloudflare',
             'global',
+            'ipv4',
         ],
     },{
         'name': 'google-1',
@@ -98,6 +107,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'google',
             'global',
+            'ipv4',
         ],
     },
     {
@@ -108,6 +118,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'google',
             'global',
+            'ipv4',
         ],
     },
     {
@@ -118,6 +129,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'google',
             'global',
+            'ipv4',
         ],
     },
     {
@@ -137,6 +149,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'alidns',
             'cn',
+            'ipv4',
         ],
     },
     {
@@ -147,6 +160,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'alidns',
             'cn',
+            'ipv4',
         ],
     },
     {
@@ -157,6 +171,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'alidns',
             'cn',
+            'ipv6',
         ],
     },
     {
@@ -167,6 +182,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'alidns',
             'cn',
+            'ipv6',
         ],
     },
     {
@@ -196,6 +212,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             '114dns',
             'cn',
+            'ipv4',
         ],
     },
     {
@@ -206,6 +223,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             '114dns',
             'cn',
+            'ipv4',
         ],
     },
     {
@@ -216,6 +234,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'onedns',
             'cn',
+            'ipv4',
         ],
     },
     {
@@ -226,6 +245,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'onedns',
             'cn',
+            'ipv4',
         ],
     },
     {
@@ -236,6 +256,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'onedns',
             'cn',
+            'ipv6',
         ],
     },
     {
@@ -246,6 +267,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'onedns',
             'cn',
+            'ipv6',
         ],
     },
     {
@@ -256,6 +278,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'dnspod',
             'cn',
+            'ipv4',
         ],
     },
     {
@@ -266,6 +289,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'dnspod',
             'cn',
+            'ipv4',
         ],
     },
     {
@@ -276,6 +300,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'dnspod',
             'cn',
+            'ipv4',
         ],
     },
     {
@@ -297,6 +322,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'dnspod',
             'cn',
+            'ipv6',
         ],
     },
     {
@@ -306,6 +332,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'dnspod',
             'cn',
+            'ipv4',
         ],
     },
     {
@@ -315,6 +342,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'dnspod',
             'cn',
+            'ipv4',
         ],
     },
     {
@@ -335,6 +363,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'baidu',
             'cn',
+            'ipv4',
         ],
     },
     {
@@ -345,6 +374,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'baidu',
             'cn',
+            'ipv6',
         ],
     },
     {
@@ -355,6 +385,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'opendns',
             'global',
+            'ipv4',
         ],
     },
     {
@@ -365,6 +396,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'opendns',
             'global',
+            'ipv4',
         ],
     },
     {
@@ -375,6 +407,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'adguard',
             'global',
+            'ipv4',
         ],
     },
     {
@@ -385,6 +418,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'adguard',
             'global',
+            'ipv4',
         ],
     },
     {
@@ -395,6 +429,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'adguard',
             'global',
+            'ipv6',
         ],
     },
     {
@@ -405,6 +440,7 @@ BUILTIN_UPSTREAMS = [
         'groups': [
             'adguard',
             'global',
+            'ipv6',
         ],
     },
     {
@@ -422,8 +458,7 @@ BUILTIN_UPSTREAMS = [
 DEFAULT_CONFIG = {
     'secure': True,
     'debug': False,
-    'host': LISTEN_HOST,
-    'port': DEFAULT_DNS_PORT,
+    'listen': LISTEN_ADDRESS,
     'timeout': UPSTREAM_TIMEOUT,
     'upstreams': BUILTIN_UPSTREAMS,
     'proxy': None,
@@ -434,6 +469,11 @@ DEFAULT_CONFIG = {
     'cache': {
         'max_size': CACHE_MAX_SIZE,
         'ttl': CACHE_TTL,
+    },
+    'log': {
+        'path': 'access.log',
+        'trace': True,
+        'payload': True,
     },
     'http': {
         'host': HTTP_HOST,
@@ -447,6 +487,9 @@ DEFAULT_CONFIG = {
 
 
 logger = logging.getLogger(__name__)
+
+
+_parse_addr = functools.partial(parse_addr, DEFAULT_LISTEN_HOST, DEFAULT_DNS_PORT)
 
 
 def _load_from_file(file_path):
@@ -474,11 +517,8 @@ def _load_from_args(args):
     if args.debug is not None:
         conf['debug'] = args.debug
 
-    if args.host is not None:
-        conf['host'] = args.host
-
-    if args.port is not None:
-        conf['port'] = args.port
+    if args.listen is not None:
+        conf['listen'] = args.listen
 
     if args.timeout is not None:
         conf['timeout'] = args.timeout
@@ -568,9 +608,35 @@ class Config:
 
         try:
             conf['proxy'] = parse_proxy(conf.get('proxy'))
-            conf['upstreams'] = [parse_upstream(_) for _ in conf['upstreams'] \
-                                    if not isinstance(_, dict) or not _.get('disable', False)]
-        except ValueError as e:
-            raise InvalidConfig(e)
+            if 'upstreams+' in conf:
+                conf['upstreams'].extend(conf['upstreams+'])
+                del conf['upstreams+']
+
+            upstreams = map(parse_upstream, conf['upstreams'])
+            if 'upstreams_filter' in conf:
+                upstreams_filter = conf['upstreams_filter']
+                del conf['upstreams_filter']
+
+                def _filter_upstream(upstream):
+                    if upstream.disable:
+                        return False
+                    if 'name' in upstreams_filter and upstream.name in upstreams_filter['name']:
+                        return True
+                    if 'group' in upstreams_filter:
+                        for group_name in upstream.groups:
+                            if group_name in upstreams_filter['group']:
+                                return True
+                    return False
+            else:
+                _filter_upstream = lambda _: not _.disable
+            conf['upstreams'] = list(filter(_filter_upstream, upstreams))
+
+            listen_addrs = conf['listen']
+            if isinstance(listen_addrs, str):
+                conf['listen'] = [_parse_addr(listen_addrs)]
+            else:
+                conf['listen'] = [_parse_addr(addr) for addr in listen_addrs]
+        except ValueError as exc:
+            raise InvalidConfig(exc)
 
         return cls(conf)

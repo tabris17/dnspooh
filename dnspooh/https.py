@@ -19,6 +19,7 @@ from urllib.parse import urlencode, urlsplit, parse_qs, quote
 
 from .scheme import Scheme
 from .exceptions import HttpException, HttpHeaderTooLarge, HttpPayloadTooLarge, HttpNotFound, InvalidConfig
+from .helpers import s_addr
 
 
 HTTP_VERSION = 'HTTP/1.1'
@@ -337,7 +338,7 @@ class Server:
 
     async def _respond(self, writer, response):
         try:
-            response.headers.add_header('Server', 'DNSPooh')
+            response.headers.add_header('Server', __package__)
             start_line = '%s %s %s\r\n' % (response.version, response.status, response.status.name)
             writer.write(start_line.encode())
             if isinstance(response, FileResponse):
@@ -404,13 +405,13 @@ class Server:
 
     async def on_connect(self, reader, writer):
         peername = writer.transport.get_extra_info('peername')
-        logger.debug('Connection from %s:%d' % peername)
+        logger.debug('Connection from %s', s_addr(peername))
         while not writer.transport.is_closing():
             try:
-                request = await asyncio.wait_for(self._read_request(reader), self.timeout)
-                logger.debug('Request received from "%s:%d": %s', *peername, request)
+                request = await asyncio.wait_for(self._read_request(reader), self.timeout_sec)
+                logger.debug('Request received from "%s": %s', s_addr(peername), request)
                 response = await self._respond(writer, await self.on_request(request))
-                logger.debug('Response sent to "%s:%d": %s', *peername, response)
+                logger.debug('Response sent to "%s": %s', s_addr(peername), response)
             except HttpException:
                 await self._respond(writer, await self.on_error(400))
                 writer.transport.close()
@@ -436,7 +437,7 @@ class Server:
         port = int(http_config['port'])
         if host != '127.0.0.1' and host != 'localhost':
             logger.warn('HTTP server host %s is not safe', host)
-        self.timeout = http_config['timeout']
+        self.timeout_sec = http_config['timeout'] / 1000
         self._server = await asyncio.start_server(self.on_connect, host, port)
         logger.info('HTTP serivce started')
         logger.info('HTTP server is available at http://%s:%d/', host, port)
