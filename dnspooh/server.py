@@ -14,12 +14,12 @@ from dnslib import DNSRecord, DNSError, DNSHeader
 
 from . import https
 from . import middlewares
-from .config import DnsUpstream, HttpsUpstream, TlsUpstream, DEFAULT_LISTEN_HOST
+from .config import DnsUpstream, HttpsUpstream, TlsUpstream
 from .pool import Pool
 from .scheme import Scheme
 from .exceptions import *
 from .stats import Stats
-from .upstream import UpstreamCollection, DEFAULT_DNS_PORT
+from .upstream import UpstreamCollection
 from .proxy import parse_proxy
 from .helpers import s_addr
 
@@ -48,7 +48,7 @@ class ServerProtocol(asyncio.DatagramProtocol):
         super().connection_lost(exc)
         if self.need_restart:
             self.need_restart = False
-            self.server.on_error(self.transport)
+            self.server.on_error_reset(self.transport)
 
     def connection_made(self, transport):
         self.transport = transport
@@ -383,16 +383,16 @@ class Server:
         self.status = self.Status.running
         if not silent: logger.info('DNS service restarted')
 
-    def on_error(self, transport):
+    def on_error_reset(self, transport):
         self.transports.remove(transport)
         sockname = transport.get_extra_info('sockname')
-        async def restart(sockname):
+        async def reset(sockname):
             transport, _ = await self.loop.create_datagram_endpoint(
                 lambda: ServerProtocol(self),
                 local_addr=sockname
             )
             self.transports.append(transport) 
-        return self.loop.create_task(restart(sockname))
+        return self.loop.create_task(reset(sockname))
 
     async def run(self):
         self.status = self.Status.start_pedding
