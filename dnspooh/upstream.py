@@ -81,7 +81,8 @@ class Upstream:
         if not isinstance(self.name, str) or self.name == '':
             raise ValueError('Upstream name must be a non-empty string')
         self.proxy = kwargs.get('proxy')
-        self.timeout = kwargs.get('timeout')
+        timeout_ms = kwargs.get('timeout')
+        self.timeout_sec = timeout_ms / 1000 if timeout_ms is not None else None
         self.groups = kwargs.get('groups', [])
         if not isinstance(self.groups, list):
             raise ValueError('Upstream groups must be a list')
