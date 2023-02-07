@@ -95,6 +95,12 @@ class Server:
 
     async def bootstrap(self):
         logger.debug('DNS service bootstrapping')
+
+        if self.test_geoip('114.114.114.114', 'cn'):
+            logger.info('Test GeoIP2 database passed')
+        else:
+            logger.warning('Test GeoIP2 database failed')
+
         self.local_addrs = self.config['listen']
         self.timeout_sec = self.config['timeout'] / 1000
         self.upstreams = UpstreamCollection(self.config['upstreams'], 
@@ -435,3 +441,8 @@ class Server:
 
         with resources.open_binary(__package__, 'geoip') as geoip_db:
             return maxminddb.open_database(geoip_db, maxminddb.MODE_FD)
+    
+    def test_geoip(self, ip, country):
+        result = self.open_geoip().get(ip)
+        _country = result['country']['iso_code'] if result else None
+        return country.upper() == _country
