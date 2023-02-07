@@ -4,11 +4,7 @@
 
 ## 1. config.yml
 
-Dnspooh 直接加载此配置文件。
-
-```shell
-dnspooh -c config.yml
-```
+Dnspooh 默认加载此配置文件。
 
 ## 2. cn-domain.yml
 
@@ -27,3 +23,7 @@ dnspooh -c config.yml
 ## 4. hosts
 
 用于设置自定义域名解析结果。格式和系统的 hosts 文件一致，相同的域名如果存在多行记录则解析结果也会返回多条记录。
+
+## 5. access.log
+
+启用 log 中间件时，运行程序后会在当前目录下生成该文件。文件为 SQLite3 数据库格式，可以用 [SQLiteStudio](https://sqlitestudio.pl/) 、 [DB Browser for SQLite](https://sqlitebrowser.org/) 等软件打开。
