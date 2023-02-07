@@ -46,34 +46,56 @@ python main.py --help
 
 ## 2. 使用方法
 
+直接运行 dnspooh 将以默认配置启动服务。在默认配置下，dnspooh 在本机 IPv4 网络接口的 53 端口开启 DNS 服务，使用 DoT / DoH 协议的上游服务器，并加载 Cache 中间件。
+
+### 2.1 命令行参数
+
 通过命令行的 `--help` 参数可以查看 Dnspooh 支持的命令行参数：
 
 ```text
-usage: dnspooh [-c file] [-u servers [servers ...]] [-t ms] [-h host] [-p port] [-D] [-d] [-v] [--help]
+usage: dnspooh [-c file] [-u dns_server [dns_server ...]] [-t ms] [-l addr [addr ...]] [-D] [-d] [-v] [-h]
 
 A Lightweight DNS MitM Proxy
 
 options:
   -c file, --config file
                         config file path (example "config.yml")
-  -u servers [servers ...], --upstream servers [servers ...]
+  -u dns_server [dns_server ...], --upstream dns_server [dns_server ...]
                         space-separated upstream DNS servers list
   -t ms, --timeout ms   milliseconds for upstream DNS response timeout (default 5000 ms)
-  -h host, --host host  local DNS proxy server listening host (default "0.0.0.0")
-  -p port, --port port  local DNS proxy server listening port (default "53")
+  -l addr [addr ...], --listen addr [addr ...]
+                        binding to local address and port for DNS proxy server (default "0.0.0.0:53")
   -D, --debug           display debug message
   -d, --dump            dump pretty config data
   -v, --version         show program's version number and exit
-  --help                show this help message and exit
+  -h, --help            show this help message and exit
 ```
 
-可以通过命令行参数和配置文件来对程序进行设置。通过命令行参数传递的设置优先级高于配置文件中对应的设置。如果没有指定配置文件，程序启动后会尝试加载当前目录下的 `config.yml` 配置文件。如果配置文件不存在，则使用默认配置。通过命令行参数 `-d` 可以查看当前的配置：
+可以通过命令行参数和配置文件来对程序进行设置。通过命令行参数传递的设置优先级高于配置文件中对应的设置。如果没有指定配置文件，程序启动后会尝试加载当前目录下的 `config.yml` 配置文件。
 
-```shell
-dnspooh -c config.yml -d
-```
+| 命令行参数                     | 描述                                 | 例子                               |
+| ------------------------------ | ------------------------------------ | ---------------------------------- |
+| -c file                        | 加载配置文件                         | dnspooh -c config.yml              |
+| -u dns_server [dns_server ...] | 上游服务器地址列表                   | dnspooh -u 114.114.114.114 1.1.1.1 |
+| -t ms                          | 设置上游服务器超时时间（单位：毫秒） |                                    |
+| -l addr [addr ...]             | 绑定本地网络地址列表                 | dnspooh -l 0.0.0.0 [::]            |
+| -D                             | 输出调试信息                         |                                    |
+| -d                             | 打印当前配置信息                     | dnspooh -c config.yml -d           |
+| -v                             | 显示程序当前版本号                   |                                    |
+| -h                             | 打印帮助信息                         |                                    |
 
-一个常规的配置文件如下：
+在命令行中设置的上游服务器地址列表，会替换程序内置的地址列表。上游服务器地址格式有如下几种：
+
+- DNS 服务器  
+  IP 地址。特别地，如果是 IPv6 地址，需要用 `[]` 包裹。例如：`1.1.1.1` ， `[2606:4700:4700::1111]`
+- DoH 服务器  
+  URL 链接。例如：`https://1.1.1.1/dns-query`
+- DoT 服务器  
+  IP 地址加 853 端口。例如：`1.1.1.1:853`
+
+### 2.2 配置文件
+
+Dnspooh 使用的配置文件为 YAML 格式。一个常规的配置文件如下：
 
 ```yaml
 proxy: http://127.0.0.1:8080
@@ -93,6 +115,7 @@ middlewares:
   - hosts
   - block
   - cache
+  - log
 ```
 
 配置文件支持 `!path` 和 `!include` 两个扩展指令。当配置项目是一个文件名时，使用 `!path` 指令表示以当前配置文件所在路径作为文件相对路径的起始位置，如果不使用 `!path` 指令，则以程序运行路径作为文件相对路径的起始位置。 `!include` 指令用来引用外部 yaml 配置文件，当前配置文件的所在路径作为被引用配置文件相对路径的起始位置。
@@ -100,12 +123,16 @@ middlewares:
 | 配置名         | 数据类型 | 默认         | 描述                                                         |
 | -------------- | -------- | ------------ | ------------------------------------------------------------ |
 | debug          | Boolean  | false        | 控制台/终端是否输出调试信息                                  |
-| host           | String   | "0.0.0.0"    | 服务绑定本机地址                                             |
-| port           | Integer  | 53           | 服务绑定本机端口                                             |
+| listen         | String/Array | "0.0.0.0:53" | 服务绑定本机地址。此项可以是一个字符串或一个数组 |
 | geoip          | String   |              | GeoIP2 数据库文件路径。默认使用 [GeoIP2-CN](https://github.com/Hackl0us/GeoIP2-CN) |
-| secure         | Boolean  | true         | 仅使用安全（DoH/DoT）的上游 DNS 服务器                       |
+| secure         | Boolean  | true         | 仅使用安全（DoH / DoT）的上游 DNS 服务器                     |
 | timeout        | Integer  | 5000          | 上游 DNS 服务器响应超时时间（单位：毫秒）                      |
 | proxy          | String   |              | 代理服务器，支持 HTTP 和 SOCKS5 代理                         |
+| upstreams | Array | | 替换内置上游 DNS 服务器列表 |
+| upstreams+ | Array | | 追加到内置上游 DNS 服务器列表 |
+| upstreams_filter |  | | 筛选出可用的上游 DNS 服务器 |
+| upstreams_filter.name | Array | | 筛选出名称存在于此列表中的服务器 |
+| upstreams_filter.group | Array | | 筛选出分组存在于此列表中的服务器 |
 | middlewares    | Array    | ["cache"]    | 启用的中间件。列表定义顺序决定加载顺序                       |
 | rules          | Array    |              | 自定义规则列表                                               |
 | hosts          | Array    |              | hosts 文件列表。支持 http/https 链接                         |
@@ -116,6 +143,32 @@ middlewares:
 | log.path       | String   | "access.log" | 访问日志的文件路径，日志文件为 SQLite3 数据库格式            |
 | log.trace      | Boolean  | true         | 是否记录调试跟踪信息                                         |
 | log.payload    | Boolean  | true         | 是否记录 DNS 请求和响应的数据                                |
+
+下面的配置文件用于追加上游 DNS 服务器：
+
+```yaml
+upstreams+:
+  - name: my-dns
+    host: 192.168.1.1
+    proxy: http://192.168.1.1
+    timeout: 5000
+    disable: false
+    priority: 0
+    groups:
+      - my
+      - cn
+
+  - name: my-dot
+    host: 192.168.1.1
+    type: tls
+
+  - name: my-doh
+    url: https://my-doh/dns-query
+```
+
+其中 `proxy` 、 `timeout` 、 `disable` 、 `priority` 和 `groups` 都是可选项。
+
+### 2.1 中间件
 
 Dnspooh 提供下列中间件：
 
@@ -191,7 +244,7 @@ if 字段由一个或多个判断条件组成的逻辑运算表达式。支持�
 - domain is *domain*  
   域名等于 *domain*
 - domain is (*domain1*, *domain2*, ...)  
-  域名与列表中任一 *domain* 相等，等价于 domain is *domain1* or domain is *domain2* or ...
+  域名与列表中任一 *domain* 相等，等价于 domain is *domain1* or domain is *domain2* or ... 
 - domain is not *domain*  
   域名不等于 *domain* ，等价于 not domain is *domain*
 - domain is not (*domain1*, *domain2*, ...)  
@@ -325,9 +378,10 @@ before 字段由下列一条或多条逗号分隔的语句组成：
 ## 4. 特性
 
 - 如果 DNS 解析请求中包含多条查询，会被逐条拆分后发送至上游服务器，并在返回响应时重新组合。这么做的目的是为了方便中间件处理；
+- 程序在引导时会优先使用 priority 值最大的 upstream 来解析 DoH 服务器的域名。默认使用 cloudflare-tls 服务器进行引导时解析；
 - 程序启动时会测试配置中所有的上游服务器，并将响应最快的服务器设置为主服务器；
 - 程序内置的 GeoIP2 数据库仅包含中国 IP 段数据，只能返回 `cn` 或空。要使用完整的 GeoIP2 数据库，可以在配置文件中指定数据库文件；
-- 程序内置的上游 DNS 解析服务器包括：[Cloudflare DNS](https://1.1.1.1/dns/) (cloudflare), [Google Public DNS](https://developers.google.com/speed/public-dns) (google), [阿里公共DNS](https://alidns.com/) (alidns), [114DNS](https://www.114dns.com/) (114dns), [OneDNS ](https://www.onedns.net/)(onedns), [DNSPod](https://www.dnspod.cn/) (dnspod), [百度DNS](https://dudns.baidu.com/)(baidu), [OpenDNS](https://www.opendns.com/) (opendns), [AdGuard DNS](https://adguard-dns.io/) (adguard) 。这些服务器按照服务供应商的名称（见括号内）分为不同组；又根据服务器所在地，分为 cn (中国)组和 global (全球)组。
+- 程序内置的上游 DNS 解析服务器包括：[Cloudflare DNS](https://1.1.1.1/dns/) (cloudflare), [Google Public DNS](https://developers.google.com/speed/public-dns) (google), [阿里公共DNS](https://alidns.com/) (alidns), [114DNS](https://www.114dns.com/) (114dns), [OneDNS ](https://www.onedns.net/)(onedns), [DNSPod](https://www.dnspod.cn/) (dnspod), [百度DNS](https://dudns.baidu.com/)(baidu), [OpenDNS](https://www.opendns.com/) (opendns), [AdGuard DNS](https://adguard-dns.io/) (adguard) 。这些服务器按照服务供应商的名称（见括号内）分为不同组；根据服务器所在地，分为 cn 组和 global 组；根据服务器网络类型，分为 ipv4 组和 ipv6 组。
 
 ## 5. 常用命令
 
