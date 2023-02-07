@@ -398,3 +398,10 @@ python -m build
 python -m unittest tests
 ```
 
+Windows 下使用 Nuitka 生成可执行文件：
+
+```powershell
+pip install nuitka dnspooh
+nuitka --standalone --output-dir=build --windows-icon-from-ico=./webui/favicon.ico --include-package-data=dnspooh --onefile --output-filename=dnspooh main.py
+```
+
