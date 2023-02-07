@@ -1,3 +1,4 @@
+import asyncio
 import enum
 import time
 
@@ -32,7 +33,7 @@ class Stats:
                 self.upstream.success += 1
                 self.result = self.Result.success
             else:
-                if isinstance(exc_type, TimeoutError):
+                if isinstance(exc_type, (TimeoutError, asyncio.exceptions.TimeoutError)):
                     self.result = self.Result.timeout
                 elif isinstance(exc_type, EmptyValueError):
                     self.result = self.Result.empty

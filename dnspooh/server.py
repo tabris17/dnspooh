@@ -332,7 +332,7 @@ class Server:
                     return response
             except ValueError:
                 logger.warning('Failed to resolve by upstream server %s', upstream.name)
-            except TimeoutError:
+            except (TimeoutError, asyncio.exceptions.TimeoutError):
                 logger.info('Upstream server %s response timeout', upstream.name)
 
     async def _handle(self, request):
@@ -395,35 +395,38 @@ class Server:
         return self.loop.create_task(reset(sockname))
 
     async def run(self):
-        self.status = self.Status.start_pedding
-        if not await self.middlewares.bootstrap():
-            logger.error('Failed to bootstrap')
-            return
-        
-        for local_addr in self.local_addrs:
-            try:
-                transport, _ = await self.loop.create_datagram_endpoint(
-                    lambda: ServerProtocol(self),
-                    local_addr=local_addr
-                )
-                self.transports.append(transport)
-                logger.info('DNS service listening on %s', s_addr(local_addr))
-            except OSError as exc:
-                logger.error('Failed to start DNS service: %s', exc)
-                return
-
-        self.status = self.Status.running
-        logger.info('DNS serivce started')
-
         try:
-            await self.abort_event.wait()
-        except asyncio.CancelledError:
-            logger.debug('DNS serivce interrupted')
+            self.status = self.Status.start_pedding
+            if not await self.middlewares.bootstrap():
+                logger.error('Failed to bootstrap')
+                return
+            
+            for local_addr in self.local_addrs:
+                try:
+                    transport, _ = await self.loop.create_datagram_endpoint(
+                        lambda: ServerProtocol(self),
+                        local_addr=local_addr
+                    )
+                    self.transports.append(transport)
+                    logger.info('DNS service listening on %s', s_addr(local_addr))
+                except OSError as exc:
+                    logger.error('Failed to start DNS service: %s', exc)
+                    return
+
+            self.status = self.Status.running
+            logger.info('DNS serivce started')
+
+            try:
+                await self.abort_event.wait()
+            except asyncio.CancelledError:
+                logger.debug('DNS serivce interrupted')
+            finally:
+                self.status = self.Status.stopped
+                logger.info('DNS serivce stopped')
         finally:
             for transport in self.transports:
                 transport.close()
-            self.status = self.Status.stopped
-            logger.info('DNS serivce stopped')
+            self.pool.dispose()
 
     def open_geoip(self):
         geoip_db = self.config.get('geoip')

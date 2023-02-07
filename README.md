@@ -4,7 +4,7 @@ Dnspooh 是一个轻量级 DNS 中继和代理服务器，可以为本机或本�
 
 ## 1. 安装和运行
 
-Dnspooh 使用 Python 语言编写，运行 Dnspooh 需要 Python 3.11 及以上版本。程序能以 Python 模块的方式运行，也能以源代码的方式直接运行。此外，项目还提供了打包后的 Windows 可执行文件。
+Dnspooh 使用 Python 语言编写，运行 Dnspooh 需要 Python 3.10 及以上版本。程序能以 Python 模块的方式运行，也能以源代码的方式直接运行。此外，项目还提供了打包后的 Windows 可执行文件。
 
 ### 1.1 Python 模块
 
@@ -391,17 +391,6 @@ before 字段由下列一条或多条逗号分隔的语句组成：
 pip install build
 python -m build
 ```
-
-可执行程序构建打包（需要安装 cx_Freeze 模块）：
-
-```shell
-pip install cx_freeze
-python bundle.py build
-```
-
-> 为何不使用 Nuitka ？
->
-> 由于项目代码使用了一些 Python 3.11 的特性，而 Nuitka 暂时还不支持 Python 3.11 的编译。考虑未来去掉代码中对 Python 3.11 特性的依赖，从而支持 Nuitka 。
 
 运行单元测试：
 
