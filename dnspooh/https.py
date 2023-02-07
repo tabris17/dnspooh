@@ -432,7 +432,7 @@ class Server:
                 await self._respond(writer, await self.on_error(400))
                 writer.transport.close()
                 break
-            except (TimeoutError, EOFError, IOError):
+            except (TimeoutError, asyncio.exceptions.TimeoutError, EOFError, IOError):
                 writer.transport.close()
                 break
             except Exception as exc:
