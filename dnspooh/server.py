@@ -48,7 +48,7 @@ class ServerProtocol(asyncio.DatagramProtocol):
         super().connection_lost(exc)
         if self.need_restart:
             self.need_restart = False
-            self.server.on_error(self.transport)
+            self.server.on_error_reset(self.transport)
 
     def connection_made(self, transport):
         self.transport = transport
@@ -95,8 +95,7 @@ class Server:
 
     async def bootstrap(self):
         logger.debug('DNS service bootstrapping')
-        self.host = self.config['host']
-        self.port = self.config['port']
+        self.local_addrs = self.config['listen']
         self.timeout_sec = self.config['timeout'] / 1000
         self.upstreams = UpstreamCollection(self.config['upstreams'], 
                                             self.config['secure'])
@@ -384,31 +383,34 @@ class Server:
         self.status = self.Status.running
         if not silent: logger.info('DNS service restarted')
 
-    def on_error(self, transport):
+    def on_error_reset(self, transport):
         self.transports.remove(transport)
         sockname = transport.get_extra_info('sockname')
-        async def restart(sockname):
+        async def reset(sockname):
             transport, _ = await self.loop.create_datagram_endpoint(
                 lambda: ServerProtocol(self),
                 local_addr=sockname
             )
             self.transports.append(transport) 
-        return self.loop.create_task(restart(sockname))
+        return self.loop.create_task(reset(sockname))
 
     async def run(self):
         self.status = self.Status.start_pedding
         if not await self.middlewares.bootstrap():
             logger.error('Failed to bootstrap')
             return
-        try:
-            transport, _ = await self.loop.create_datagram_endpoint(
-                lambda: ServerProtocol(self),
-                local_addr=(self.host, self.port)
-            )
-            self.transports.append(transport)
-        except OSError as exc:
-            logger.error('Failed to start DNS service: %s', exc)
-            return
+        
+        for local_addr in self.local_addrs:
+            try:
+                transport, _ = await self.loop.create_datagram_endpoint(
+                    lambda: ServerProtocol(self),
+                    local_addr=local_addr
+                )
+                self.transports.append(transport)
+                logger.info('DNS service listening on %s', s_addr(local_addr))
+            except OSError as exc:
+                logger.error('Failed to start DNS service: %s', exc)
+                return
 
         self.status = self.Status.running
         logger.info('DNS serivce started')

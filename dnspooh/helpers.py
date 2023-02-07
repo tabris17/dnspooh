@@ -1,3 +1,4 @@
+import urllib.parse
 
 
 def split_domain(name, reverse=True):
@@ -18,7 +19,15 @@ def s_addr(addr):
     if isinstance(addr, tuple):
         len_addr = len(addr)
         if len_addr == 2:
-            return '%s:%d' % addr
+            return '[%s]:%d' % addr if ':' in addr[0] else '%s:%d' % addr
         elif len_addr == 4:
             return '[%s]:%d' % addr[:2]
     return str(addr)
+
+
+def parse_addr(default_host, default_port, addr):
+    result = urllib.parse.urlsplit('//' + addr)
+    return (
+        result.hostname or default_host, 
+        result.port or default_port
+    )
