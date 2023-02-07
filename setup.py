@@ -52,5 +52,5 @@ setuptools.setup(
         ],
     },
     version=pkg_version['__version__'],
-    zip_safe=True
+    zip_safe=False
 )
