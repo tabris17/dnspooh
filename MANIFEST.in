@@ -1,2 +1,5 @@
 include MANIFEST.in *.md LICENSE dnspooh/geoip
 recursive-include dnspooh *.py
+
+exclude .github/
+recursive-exclude .github
