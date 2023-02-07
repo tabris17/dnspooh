@@ -369,7 +369,7 @@ class Server:
         try:
             transport.sendto(response.pack(), addr)
         except Exception:
-            logger.warning('Failed to send data to %s', s_addr(addr))
+            logger.debug('Failed to send data to %s', s_addr(addr))
 
     def on_request(self, transport, data, addr):
         request = DNSRecord.parse(data)
