@@ -4,7 +4,7 @@
 
 ## 1. config.yml
 
-Dnspooh 默认加载此配置文件。
+将该配置文件放在 Dnspooh 的运行目录下，程序启动时会自动加载。
 
 ## 2. cn-domain.yml
 
@@ -26,4 +26,8 @@ Dnspooh 默认加载此配置文件。
 
 ## 5. access.log
 
-启用 log 中间件时，运行程序后会在当前目录下生成该文件。文件为 SQLite3 数据库格式，可以用 [SQLiteStudio](https://sqlitestudio.pl/) 、 [DB Browser for SQLite](https://sqlitebrowser.org/) 等软件打开。
+启用 log 中间件时，运行程序后会在当前目录下生成该文件，其中保存了所有的 DNS 查询记录。文件为 SQLite3 数据库格式，可以用 [SQLiteStudio](https://sqlitestudio.pl/) 、 [DB Browser for SQLite](https://sqlitebrowser.org/) 等软件打开。
+
+----
+
+此外，程序在启动时会从远程加载 https://raw.hellogithub.com/hosts 。该文件中提供了 Github 域名可用的 IP 解析，由开源项目 [GitHub520](https://github.com/521xueweihan/GitHub520) 提供。
