@@ -16,7 +16,7 @@ pkg_requires = [
     'PyYAML==6.0',
 ]
 pkg_version = {}
-python_requires = '>=3.11'
+python_requires = '>=3.10'
 
 with io.open('README.md', 'r', encoding='utf8') as f:
     long_description = f.read()
@@ -30,6 +30,7 @@ setuptools.setup(
         "Topic :: Internet :: Name Service (DNS)",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3 :: Only",
     ],

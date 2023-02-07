@@ -75,4 +75,7 @@ def main():
         format="%(asctime)s [%(name)s.%(levelname)s] %(message)s",
         handlers=[logging.StreamHandler()]
     )
-    asyncio.run(startup())
+    try:
+        asyncio.run(startup())
+    except KeyboardInterrupt:
+        pass

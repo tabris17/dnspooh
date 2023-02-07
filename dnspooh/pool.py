@@ -68,6 +68,12 @@ class Connection:
     def udp_tunnel_enabled(self):
         return self.udp_tunnel is not None
 
+    def close(self):
+        return self.writer.transport.close()
+
+    def abort(self):
+        return self.writer.transport.abort()
+
 
 class Pool:
     DEFAULT_LIMIT = 2 ** 16
@@ -76,7 +82,7 @@ class Pool:
     def __init__(self, loop=None, size=DEFAULT_SIZE):
         self.size = size
         self.total = 0
-        self.conns = dict()
+        self.connections = dict()
         self.loop = asyncio.get_running_loop() if loop is None else loop
 
     def add(self, conn):
@@ -86,30 +92,30 @@ class Pool:
         if conn.is_closing():
             raise ConnectionError('Fail to connect "%s"' % (conn.name, ))
 
-        if conn.name in self.conns:
-            if conn in self.conns[conn.name]:
+        if conn.name in self.connections:
+            if conn in self.connections[conn.name]:
                 return False
-            self.conns[conn.name].add(conn)
+            self.connections[conn.name].add(conn)
         else:
-            self.conns[conn.name] = set([conn])
+            self.connections[conn.name] = set([conn])
         self.total += 1
         conn.register()
         logger.debug('Add "%s" to connection pool', conn.name)
         return True
 
     def remove(self, conn):
-        if conn.name in self.conns:
-            if conn in self.conns[conn.name]:
-                self.conns[conn.name].remove(conn)
+        if conn.name in self.connections:
+            if conn in self.connections[conn.name]:
+                self.connections[conn.name].remove(conn)
                 self.total -= 1
                 return True
 
         return False
 
     def get(self, conn_name):
-        if conn_name not in self.conns:
+        if conn_name not in self.connections:
             return
-        for conn in self.conns[conn_name]:
+        for conn in self.connections[conn_name]:
             if conn.idle:
                 return conn
         return
@@ -121,7 +127,7 @@ class Pool:
     async def connect(self, host, port, 
                       scheme=Scheme.tcp, proxy=None, 
                       limit=DEFAULT_LIMIT, pooled=True, **kwds):
-        conn_name = self._make_conn_name(host, port, scheme, proxy)
+        conn_name = _make_conn_name(host, port, scheme, proxy)
         conn = self.get(conn_name)
         if conn:
             return conn
@@ -165,8 +171,13 @@ class Pool:
         conn = Connection(conn_name, reader, writer)
         if pooled: self.add(conn)
         return conn
+        
+    def dispose(self):
+        for conn_set in self.connections.values():
+            for conn in conn_set:
+                conn.abort()
 
-    @staticmethod
-    def _make_conn_name(host, port, scheme, proxy):
-        name = '%s://%s:%d' % (scheme.name, host, port)
-        return name if proxy is None else '%s/%s' % (proxy.url, name)
+
+def _make_conn_name(host, port, scheme, proxy):
+    name = '%s://%s:%d' % (scheme.name, host, port)
+    return name if proxy is None else '%s/%s' % (proxy.url, name)

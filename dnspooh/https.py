@@ -3,6 +3,7 @@ import base64
 import io
 import json
 import logging
+import enum
 import email
 import email.policy
 import mimetypes
@@ -13,7 +14,7 @@ import ipaddress
 import dnslib
 
 from collections import namedtuple
-from http import HTTPStatus, HTTPMethod
+from http import HTTPStatus
 from http.client import HTTPMessage
 from urllib.parse import urlencode, urlsplit, parse_qs, quote
 
@@ -36,6 +37,21 @@ ContentType = namedtuple('ContentType', ['media_type', 'charset', 'boundary', 'n
 ContentDisposition = namedtuple('ContentDisposition', ['type', 'name', 'filename'])
 
 UploadedFile = namedtuple('UploadedFile', ['filename', 'name', 'content_type', 'content'])
+
+
+class HTTPMethod(str, enum.Enum):
+    CONNECT = 'CONNECT'
+    DELETE = 'DELETE'
+    GET = 'GET'
+    HEAD = 'HEAD'
+    OPTIONS = 'OPTIONS'
+    PATCH = 'PATCH'
+    POST = 'POST'
+    PUT = 'PUT'
+    TRACE = 'TRACE'
+
+    def __str__(self):
+        return self.value
 
 
 class HttpMessage(HTTPMessage):
@@ -416,7 +432,7 @@ class Server:
                 await self._respond(writer, await self.on_error(400))
                 writer.transport.close()
                 break
-            except (TimeoutError, EOFError, IOError):
+            except (TimeoutError, asyncio.exceptions.TimeoutError, EOFError, IOError):
                 writer.transport.close()
                 break
             except Exception as exc:
@@ -572,7 +588,7 @@ async def fetch(url, resolver, pool, proxy=None, **kwargs):
             raise HttpException('Could not resolve domain %s' % (hostname, ))
         host = str(dns_response.rr[0].rdata)
     if 'method' in kwargs:
-        method =HTTPMethod(kwargs['method'])
+        method = HTTPMethod(kwargs['method'])
     else:
         method = HTTPMethod.GET
     if method not in (HTTPMethod.GET, HTTPMethod.POST):
