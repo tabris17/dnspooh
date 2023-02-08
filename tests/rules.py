@@ -5,28 +5,13 @@ import dnslib
 
 from dnspooh.middlewares.rules import RuleIfParser, RuleThenParser, RuleBeforeParser, RuleAfterParser, ReplacDomainHandler
 
+from . import dns_request, dns_answer, dns_response
+
 
 if_parser = RuleIfParser()
 then_parser = RuleThenParser()
 before_parser = RuleBeforeParser()
 after_parser = RuleAfterParser()
-
-
-def dns_request(domain):
-    return dnslib.DNSRecord.question(domain)
-
-
-def dns_answer(request, ip_addr):
-    request.add_answer(dnslib.RR(request.q.qname, dnslib.QTYPE.A,
-        rdata=dnslib.A(ip_addr)))
-    return request
-
-
-def dns_response(domain, *ip_addrs):
-    request = dns_request(domain)
-    for ip_addr in ip_addrs:
-        dns_answer(request, ip_addr)
-    return request
 
 
 class RuleIfTest(unittest.TestCase):
