@@ -2,6 +2,7 @@ import urllib.parse
 
 
 def split_domain(name, reverse=True):
+    name = name.rstrip('.')
     dot_pos = name.find('.')
     if reverse:
         yield name

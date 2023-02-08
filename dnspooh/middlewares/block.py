@@ -74,7 +74,7 @@ class BlockMiddleware(Middleware):
         if request.q.qtype not in (dnslib.QTYPE.A, dnslib.QTYPE.AAAA):
             return await super().handle(request, **kwargs)
 
-        domain_parts = split_domain(request.q.qname.idna().rstrip('.'))
+        domain_parts = list(split_domain(request.q.qname.idna()))
         for blacklist, _ in self.blacklists.values():
             for part in domain_parts:
                 if part in blacklist:
