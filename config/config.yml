@@ -1,5 +1,7 @@
 #proxy: socks5://127.0.0.1:7890
 
+secure: true
+
 hosts:
   - !path hosts
   - https://raw.hellogithub.com/hosts

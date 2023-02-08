@@ -456,7 +456,7 @@ BUILTIN_UPSTREAMS = [
 ]
 
 DEFAULT_CONFIG = {
-    'secure': True,
+    'secure': False,
     'debug': False,
     'listen': LISTEN_ADDRESS,
     'timeout': UPSTREAM_TIMEOUT,
@@ -522,6 +522,9 @@ def _load_from_args(args):
 
     if args.timeout is not None:
         conf['timeout'] = args.timeout
+
+    if args.secure is not None:
+        conf['secure'] = args.secure
 
     if args.upstreams is not None:
         conf['upstreams'] = args.upstreams
