@@ -53,7 +53,7 @@ python main.py --help
 通过命令行的 `--help` 参数可以查看 Dnspooh 支持的命令行参数：
 
 ```text
-usage: dnspooh [-c file] [-u dns_server [dns_server ...]] [-t ms] [-l addr [addr ...]] [-S] [-D] [-d] [-v] [-h]
+usage: dnspooh [-c file] [-u dns_server [dns_server ...]] [-t ms] [-l addr [addr ...]] [-S] [-6] [-D] [-d] [-v] [-h]
 
 A Lightweight DNS MitM Proxy
 
@@ -65,7 +65,8 @@ options:
   -t ms, --timeout ms   milliseconds for upstream DNS response timeout (default 5000 ms)
   -l addr [addr ...], --listen addr [addr ...]
                         binding to local address and port for DNS proxy server (default "0.0.0.0:53")
-  -S, --secure          use DoT/DoH upstream servers only
+  -S, --secure-only     use DoT/DoH upstream servers only
+  -6, --enable-ipv6     enable IPv6 upstream servers
   -D, --debug           display debug message
   -d, --dump            dump pretty config data
   -v, --version         show program's version number and exit
@@ -82,6 +83,7 @@ options:
 | -l addr [addr ...]             | 绑定本地网络地址列表                 | dnspooh -l 0.0.0.0 [::]            |
 | -D                             | 输出调试信息                         |                                    |
 | -S                             | 仅使用 DoT/DoH 协议的上游服务器      |                                    |
+| -6                             | 启用 IPv6 服务器                     |                                    |
 | -d                             | 打印当前配置信息                     | dnspooh -c config.yml -d           |
 | -v                             | 显示程序当前版本号                   |                                    |
 | -h                             | 打印帮助信息                         |                                    |
@@ -128,6 +130,7 @@ middlewares:
 | listen         | String/Array | "0.0.0.0:53" | 服务绑定本机地址。此项可以是一个字符串或一个数组 |
 | geoip          | String   |              | GeoIP2 数据库文件路径。默认使用 [GeoIP2-CN](https://github.com/Hackl0us/GeoIP2-CN) |
 | secure         | Boolean  | false        | 仅使用安全（DoH / DoT）的上游 DNS 服务器                     |
+| ipv6 | Boolean | false | 启用 IPv6 地址的上游 DNS 服务器 |
 | timeout        | Integer  | 5000          | 上游 DNS 服务器响应超时时间（单位：毫秒）                      |
 | proxy          | String   |              | 代理服务器，支持 HTTP 和 SOCKS5 代理                         |
 | upstreams | Array | | 替换内置上游 DNS 服务器列表 |

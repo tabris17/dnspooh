@@ -28,9 +28,10 @@ def parse_arguments():
                         help='milliseconds for upstream DNS response timeout (default %d ms)' % (UPSTREAM_TIMEOUT, ))
     parser.add_argument('-l', '--listen', metavar='addr', dest='listen', nargs='+', 
                         help='binding to local address and port for DNS proxy server (default "%s")' % (LISTEN_ADDRESS, ))
-    parser.add_argument('-S', '--secure', action='store_true', help='use DoT/DoH upstream servers only')
+    parser.add_argument('-S', '--secure-only', dest='secure', action='store_true', help='use DoT/DoH upstream servers only')
+    parser.add_argument('-6', '--enable-ipv6', dest='ipv6', action='store_true', help='enable IPv6 upstream servers')
     parser.add_argument('-D', '--debug', action='store_true', help='display debug message')
-    parser.add_argument('-d', '--dump', action='store_true', default=False, help='dump pretty config data')
+    parser.add_argument('-d', '--dump', action='store_true', help='dump pretty config data')
     parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + __version__)
     parser.add_argument('-h', '--help', action='help', help='show this help message and exit')
 
@@ -53,6 +54,7 @@ async def startup():
 
         loop = asyncio.get_running_loop()
         loop.set_debug(debug)
+        loop.set_exception_handler(lambda _, context: logger.warning(context['message']))
 
         dns_server = server.Server(config, loop)
         dispatcher = https.Dispatcher(dns_server)

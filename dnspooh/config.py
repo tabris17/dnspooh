@@ -456,6 +456,7 @@ BUILTIN_UPSTREAMS = [
 ]
 
 DEFAULT_CONFIG = {
+    'ipv6': False,
     'secure': False,
     'debug': False,
     'listen': LISTEN_ADDRESS,
@@ -526,9 +527,11 @@ def _load_from_args(args):
     if args.secure is not None:
         conf['secure'] = args.secure
 
+    if args.ipv6 is not None:
+        conf['ipv6'] = args.ipv6
+
     if args.upstreams is not None:
         conf['upstreams'] = args.upstreams
-        conf['secure'] = False
 
     return conf
 
