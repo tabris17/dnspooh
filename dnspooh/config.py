@@ -459,7 +459,7 @@ DEFAULT_CONFIG = {
     'ipv6': False,
     'secure': False,
     'debug': False,
-    'log': None,
+    'output': None,
     'listen': LISTEN_ADDRESS,
     'timeout': UPSTREAM_TIMEOUT,
     'upstreams': BUILTIN_UPSTREAMS,
@@ -472,7 +472,7 @@ DEFAULT_CONFIG = {
         'max_size': CACHE_MAX_SIZE,
         'ttl': CACHE_TTL,
     },
-    'logger': {
+    'log': {
         'path': 'access.log',
         'trace': True,
         'payload': True,
