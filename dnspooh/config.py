@@ -472,7 +472,7 @@ DEFAULT_CONFIG = {
         'max_size': CACHE_MAX_SIZE,
         'ttl': CACHE_TTL,
     },
-    'log': {
+    'logger': {
         'path': 'access.log',
         'trace': True,
         'payload': True,
