@@ -47,6 +47,10 @@ async def startup():
             from pprint import pprint
             pprint(config.conf)
             return
+            
+        log_file = config['log']
+        if log_file:
+            logging.root.addHandler(logging.FileHandler(log_file))
 
         debug = config['debug']
         if debug:
