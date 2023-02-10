@@ -459,6 +459,7 @@ DEFAULT_CONFIG = {
     'ipv6': False,
     'secure': False,
     'debug': False,
+    'log': None,
     'listen': LISTEN_ADDRESS,
     'timeout': UPSTREAM_TIMEOUT,
     'upstreams': BUILTIN_UPSTREAMS,
