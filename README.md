@@ -65,6 +65,8 @@ options:
   -t ms, --timeout ms   milliseconds for upstream DNS response timeout (default 5000 ms)
   -l addr [addr ...], --listen addr [addr ...]
                         binding to local address and port for DNS proxy server (default "0.0.0.0:53")
+  -o file, --output file
+                        write stdout to the specified file.
   -S, --secure-only     use DoT/DoH upstream servers only
   -6, --enable-ipv6     enable IPv6 upstream servers
   -D, --debug           display debug message
@@ -81,6 +83,7 @@ options:
 | -u dns_server [dns_server ...] | 上游服务器地址列表                   | dnspooh -u 114.114.114.114 1.1.1.1 |
 | -t ms                          | 设置上游服务器超时时间（单位：毫秒） |                                    |
 | -l addr [addr ...]             | 绑定本地网络地址列表                 | dnspooh -l 0.0.0.0 [::]            |
+| -o file                        | 将 stdout 保存到文件          |                                    |
 | -D                             | 输出调试信息                         |                                    |
 | -S                             | 仅使用 DoT/DoH 协议的上游服务器      |                                    |
 | -6                             | 启用 IPv6 服务器                     |                                    |
