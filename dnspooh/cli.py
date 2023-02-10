@@ -28,6 +28,8 @@ def parse_arguments():
                         help='milliseconds for upstream DNS response timeout (default %d ms)' % (UPSTREAM_TIMEOUT, ))
     parser.add_argument('-l', '--listen', metavar='addr', dest='listen', nargs='+', 
                         help='binding to local address and port for DNS proxy server (default "%s")' % (LISTEN_ADDRESS, ))
+    parser.add_argument('-o', '--output', metavar='log', dest='output', 
+                        help='write stdout to the specified file.')
     parser.add_argument('-S', '--secure-only', dest='secure', action='store_true', help='use DoT/DoH upstream servers only')
     parser.add_argument('-6', '--enable-ipv6', dest='ipv6', action='store_true', help='enable IPv6 upstream servers')
     parser.add_argument('-D', '--debug', action='store_true', help='display debug message')
@@ -48,9 +50,9 @@ async def startup():
             pprint(config.conf)
             return
             
-        log_file = config['log']
-        if log_file:
-            logging.root.addHandler(logging.FileHandler(log_file))
+        tee_file = config['output']
+        if tee_file:
+            logging.root.addHandler(logging.FileHandler(tee_file))
 
         debug = config['debug']
         if debug:
