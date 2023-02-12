@@ -53,7 +53,7 @@ python main.py --help
 通过命令行的 `--help` 参数可以查看 Dnspooh 支持的命令行参数：
 
 ```text
-usage: dnspooh [-c file] [-u dns_server [dns_server ...]] [-t ms] [-l addr [addr ...]] [-S] [-D] [-d] [-v] [-h]
+usage: dnspooh [-c file] [-u dns_server [dns_server ...]] [-t ms] [-l addr [addr ...]] [-S] [-6] [-D] [-d] [-v] [-h]
 
 A Lightweight DNS MitM Proxy
 
@@ -65,7 +65,10 @@ options:
   -t ms, --timeout ms   milliseconds for upstream DNS response timeout (default 5000 ms)
   -l addr [addr ...], --listen addr [addr ...]
                         binding to local address and port for DNS proxy server (default "0.0.0.0:53")
-  -S, --secure          use DoT/DoH upstream servers only
+  -o file, --output file
+                        write stdout to the specified file.
+  -S, --secure-only     use DoT/DoH upstream servers only
+  -6, --enable-ipv6     enable IPv6 upstream servers
   -D, --debug           display debug message
   -d, --dump            dump pretty config data
   -v, --version         show program's version number and exit
@@ -80,8 +83,10 @@ options:
 | -u dns_server [dns_server ...] | 上游服务器地址列表                   | dnspooh -u 114.114.114.114 1.1.1.1 |
 | -t ms                          | 设置上游服务器超时时间（单位：毫秒） |                                    |
 | -l addr [addr ...]             | 绑定本地网络地址列表                 | dnspooh -l 0.0.0.0 [::]            |
+| -o file                        | 将 stdout 写入到指定文件             |                                    |
 | -D                             | 输出调试信息                         |                                    |
 | -S                             | 仅使用 DoT/DoH 协议的上游服务器      |                                    |
+| -6                             | 启用 IPv6 服务器                     |                                    |
 | -d                             | 打印当前配置信息                     | dnspooh -c config.yml -d           |
 | -v                             | 显示程序当前版本号                   |                                    |
 | -h                             | 打印帮助信息                         |                                    |
@@ -122,29 +127,31 @@ middlewares:
 
 配置文件支持 `!path` 和 `!include` 两个扩展指令。当配置项目是一个文件名时，使用 `!path` 指令表示以当前配置文件所在路径作为文件相对路径的起始位置，如果不使用 `!path` 指令，则以程序运行路径作为文件相对路径的起始位置。 `!include` 指令用来引用外部 yaml 配置文件，当前配置文件的所在路径作为被引用配置文件相对路径的起始位置。
 
-| 配置名         | 数据类型 | 默认         | 描述                                                         |
-| -------------- | -------- | ------------ | ------------------------------------------------------------ |
-| debug          | Boolean  | false        | 控制台/终端是否输出调试信息                                  |
-| listen         | String/Array | "0.0.0.0:53" | 服务绑定本机地址。此项可以是一个字符串或一个数组 |
-| geoip          | String   |              | GeoIP2 数据库文件路径。默认使用 [GeoIP2-CN](https://github.com/Hackl0us/GeoIP2-CN) |
-| secure         | Boolean  | false        | 仅使用安全（DoH / DoT）的上游 DNS 服务器                     |
-| timeout        | Integer  | 5000          | 上游 DNS 服务器响应超时时间（单位：毫秒）                      |
-| proxy          | String   |              | 代理服务器，支持 HTTP 和 SOCKS5 代理                         |
-| upstreams | Array | | 替换内置上游 DNS 服务器列表 |
-| upstreams+ | Array | | 追加到内置上游 DNS 服务器列表 |
-| upstreams_filter |  | | 筛选出可用的上游 DNS 服务器 |
-| upstreams_filter.name | Array | | 筛选出名称存在于此列表中的服务器 |
-| upstreams_filter.group | Array | | 筛选出分组存在于此列表中的服务器 |
-| middlewares    | Array    | ["cache"]    | 启用的中间件。列表定义顺序决定加载顺序                       |
-| rules          | Array    |              | 自定义规则列表                                               |
-| hosts          | Array    |              | hosts 文件列表。支持 http/https 链接                         |
-| block          | Array    |              | 黑名单文件列表。支持 http/https 链接                         |
-| cache          |          |              | 缓存配置                                                     |
-| cache.max_size | Integer  | 4096         | 最大缓存条目数                                               |
-| cache.ttl      | Integer  | 86400        | 缓存有效期（单位：秒）                                       |
-| log.path       | String   | "access.log" | 访问日志的文件路径，日志文件为 SQLite3 数据库格式            |
-| log.trace      | Boolean  | true         | 是否记录调试跟踪信息                                         |
-| log.payload    | Boolean  | true         | 是否记录 DNS 请求和响应的数据                                |
+| 配置名                   | 数据类型     | 默认         | 描述                                                         |
+| ------------------------ | ------------ | ------------ | ------------------------------------------------------------ |
+| debug                    | Boolean      | false        | 控制台/终端是否输出调试信息                                  |
+| listen                   | String/Array | "0.0.0.0:53" | 服务绑定本机地址。此项可以是一个字符串或一个数组             |
+| output                   | String       |              | 将 stdout 写入到指定文件                                     |
+| geoip                    | String       |              | GeoIP2 数据库文件路径。默认使用 [GeoIP2-CN](https://github.com/Hackl0us/GeoIP2-CN) |
+| secure                   | Boolean      | false        | 仅使用安全（DoH / DoT）的上游 DNS 服务器                     |
+| ipv6                     | Boolean      | false        | 启用 IPv6 地址的上游 DNS 服务器                              |
+| timeout                  | Integer      | 5000         | 上游 DNS 服务器响应超时时间（单位：毫秒）                    |
+| proxy                    | String       |              | 代理服务器，支持 HTTP 和 SOCKS5 代理                         |
+| upstreams                | Array        |              | 替换内置上游 DNS 服务器列表                                  |
+| upstreams+               | Array        |              | 追加到内置上游 DNS 服务器列表                                |
+| upstreams_filter         |              |              | 筛选出可用的上游 DNS 服务器                                  |
+| upstreams_filter.name    | Array        |              | 筛选出名称存在于此列表中的服务器                             |
+| upstreams_filter.group   | Array        |              | 筛选出分组存在于此列表中的服务器                             |
+| middlewares              | Array        | ["cache"]    | 启用的中间件。列表定义顺序决定加载顺序                       |
+| rules                    | Array        |              | 自定义规则列表                                               |
+| hosts                    | Array        |              | hosts 文件列表。支持 http/https 链接                         |
+| block                    | Array        |              | 黑名单文件列表。支持 http/https 链接                         |
+| cache                    |              |              | 缓存配置                                                     |
+| cache.max_size           | Integer      | 4096         | 最大缓存条目数                                               |
+| cache.ttl                | Integer      | 86400        | 缓存有效期（单位：秒）                                       |
+| log.path                 | String       | "access.log" | 访问日志的文件路径，日志文件为 SQLite3 数据库格式            |
+| log.trace                | Boolean      | true         | 是否记录调试跟踪信息                                         |
+| log.payload              | Boolean      | true         | 是否记录 DNS 请求和响应的数据                                |
 
 下面的配置文件用于追加上游 DNS 服务器：
 
