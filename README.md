@@ -53,7 +53,7 @@ python main.py --help
 通过命令行的 `--help` 参数可以查看 Dnspooh 支持的命令行参数：
 
 ```text
-usage: dnspooh [-c file] [-u dns_server [dns_server ...]] [-t ms] [-l addr [addr ...]] [-S] [-6] [-D] [-d] [-v] [-h]
+usage: dnspooh [-c file] [-u dns_server [dns_server ...]] [-t ms] [-l addr [addr ...]] [-o file] [-S] [-6] [-D] [-d] [-v] [-h]
 
 A Lightweight DNS MitM Proxy
 
@@ -66,7 +66,7 @@ options:
   -l addr [addr ...], --listen addr [addr ...]
                         binding to local address and port for DNS proxy server (default "0.0.0.0:53")
   -o file, --output file
-                        write stdout to the specified file.
+                        write stdout to the specified file
   -S, --secure-only     use DoT/DoH upstream servers only
   -6, --enable-ipv6     enable IPv6 upstream servers
   -D, --debug           display debug message
