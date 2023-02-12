@@ -50,9 +50,9 @@ async def startup():
             pprint(config.conf)
             return
             
-        tee_file = config['output']
-        if tee_file:
-            logging.root.addHandler(logging.FileHandler(tee_file))
+        output_file = config.get('output')
+        if output_file:
+            logging.root.addHandler(logging.FileHandler(output_file))
 
         debug = config['debug']
         if debug:
