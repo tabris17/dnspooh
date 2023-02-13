@@ -104,7 +104,8 @@ class Server:
         self.local_addrs = self.config['listen']
         self.timeout_sec = self.config['timeout'] / 1000
         self.upstreams = UpstreamCollection(self.config['upstreams'], 
-                                            self.config['secure'])
+                                            self.config['secure'],
+                                            self.config['ipv6'])
         self.proxy = self.config['proxy']
         if self.proxy:
             logger.info('Using proxy %s', self.proxy)

@@ -1,7 +1,7 @@
 import functools
 
 from urllib.parse import urlsplit
-from ipaddress import ip_address
+from ipaddress import ip_address, IPv6Address
 
 
 DEFAULT_DOT_PORT = 853
@@ -12,10 +12,14 @@ DEFAULT_HTTPS_PORT = 443
 
 
 class UpstreamCollection:
-    def __init__(self, upstreams, only_secure):
+    def __init__(self, upstreams, only_secure, enable_ipv6):
         if only_secure:
             upstreams = list(filter(
-                lambda up: isinstance(up, (TlsUpstream, HttpsUpstream)), 
+                lambda _: isinstance(_, (TlsUpstream, HttpsUpstream)), 
+                upstreams))
+        if not enable_ipv6:
+            upstreams = list(filter(
+                lambda _: _.host and not isinstance(ip_address(_.host), IPv6Address),
                 upstreams))
         if not upstreams:
             raise ValueError('No upstream server available')
