@@ -411,6 +411,6 @@ Windows 下使用 Nuitka 生成可执行文件：
 
 ```powershell
 pip install nuitka ordered-set zstandard dnspooh
-nuitka --standalone --output-dir=build --output-filename=dnspooh --windows-icon-from-ico=./webui/favicon.ico --include-package-data=dnspooh --onefile main.py
+nuitka --standalone --output-dir=build --output-filename=dnspooh --windows-icon-from-ico=./assets/favicon.ico --include-package-data=dnspooh --onefile main.py
 ```
 
