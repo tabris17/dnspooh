@@ -62,11 +62,10 @@ async def startup():
         loop.set_debug(debug)
         loop.set_exception_handler(lambda _, context: logger.warning(context['message']))
 
-        dns_server = server.Server(config, loop)
-        dispatcher = https.Dispatcher(dns_server)
-        http_server = https.Server(config, dispatcher, loop)
+        main_server = server.Server(config, loop)
+        http_server = https.Server(config, None, loop)
 
-        await asyncio.gather(dns_server.run(), http_server.run())
+        await asyncio.gather(main_server.run(), http_server.run())
     except asyncio.CancelledError:
         logger.info('Exit')
     except InvalidConfig as exc:

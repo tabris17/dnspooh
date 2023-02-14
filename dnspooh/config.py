@@ -481,8 +481,8 @@ DEFAULT_CONFIG = {
         'host': HTTP_HOST,
         'port': HTTP_PORT,
         'timeout': HTTP_TIMEOUT,
-        'static_files': 'web',
-        'disable': True,
+        'static_files': 'webui',
+        'disable': False,
     },
     'middlewares': ['cache'],
 }

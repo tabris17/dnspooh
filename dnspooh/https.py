@@ -66,6 +66,9 @@ class HttpMessage(HTTPMessage):
             del self[name]
         return self.add_header(name, str(value), **params)
 
+    def is_closing(self):
+        return self.get('Connection', '').lower() == 'close'
+
 
 class FormData:
     def __init__(self):
@@ -345,17 +348,29 @@ class Server:
 
     DEFAULT_FILES = ['index.html', 'index.htm', 'default.htm', 'default.html']
 
-    def __init__(self, config, dispatcher, loop=None):
+    def __init__(self, config, handler=None, loop=None):
         self.loop = asyncio.get_running_loop() if loop is None else loop
         self.config = config
-        self.dispatcher = dispatcher
+        self._request_handler = self._create_request_handler(handler)
         self._server = None
         logger.debug('HTTP serivce initialized')
+    
+    def _create_request_handler(self, handler):
+        if hasattr(handler, 'handle'):
+            async def _handler(req):
+                return await handler.handle(req)
+        elif callable(handler):
+            async def _handler(req):
+                return await handler(req)
+        else:
+            async def _handler(req):
+                return await self.on_error(404)
+        return _handler
 
     async def _respond(self, writer, response):
         try:
             response.headers.add_header('Server', __package__)
-            start_line = '%s %s %s\r\n' % (response.version, response.status, response.status.name)
+            start_line = '%s %d %s\r\n' % (response.version, response.status.value, response.status.phrase)
             writer.write(start_line.encode())
             if isinstance(response, FileResponse):
                 ctype, charset = mimetypes.guess_type(response.file)
@@ -379,6 +394,8 @@ class Server:
                 del response.headers['Content-Length']
                 writer.write(response.headers.as_bytes())
             await writer.drain()
+            if response.headers.is_closing():
+                writer.abort()
         except:
             raise IOError('Response begin sending and an error occurred')
         return response
@@ -391,7 +408,8 @@ class Server:
             req.method = HTTPMethod(method)
         except HttpException as exc:
             raise exc
-        except:
+        except Exception as exc:
+            logger.info(exc)
             raise HttpException('Invalid request')
         return req
 
@@ -412,11 +430,12 @@ class Server:
         static_file = self._resolve_static_file(request.path)
         if static_file:
             return FileResponse(static_file)
-        return self.dispatcher.dispatch(request)
+        return await (self._request_handler)(request)
 
-    async def on_error(self, status):
+    async def on_error(self, status, body=None):
         resp = Response(status)
         resp.headers.add_header('Connection', 'close')
+        resp.body = body
         return resp
 
     async def on_connect(self, reader, writer):
@@ -465,7 +484,6 @@ class Server:
             logger.debug('HTTP serivce interrupted')
         finally:
             self._server.close()
-            #self.status = self.Status.stopped
             logger.info('HTTP serivce stopped')
 
 
@@ -539,32 +557,6 @@ def parse_uploaded_file(message, content_disposition=None):
     else:
         content = content.encode()
     return UploadedFile(filename, name, content_type, content)
-
-
-class Dispatcher:
-    def __init__(self, dns_server):
-        super().__init__()
-        self.dns_server = dns_server
-
-    def _status(self):
-        return JsonResponse({
-            'status': self.dns_server.status.name,
-            'upstreams': [vars(up) for up in self.dns_server.upstreams],
-            'stats': [record.as_dict() for record in self.dns_server.stats.records],
-        })
-
-    def _stop(self, request):
-        pass
-
-    def _restart(self, request):
-        pass
-
-    def dispatch(self, request):
-        match request.method, request.path:
-            case HTTPMethod.GET, '/status': return self._status()
-            case HTTPMethod.POST, '/stop': return self._stop(request)
-            case HTTPMethod.POST, '/restart': return self._start(request)
-        raise HttpNotFound()
 
 
 async def fetch(url, resolver, pool, proxy=None, **kwargs):
