@@ -10,7 +10,7 @@ except ImportError:
 from .upstream import *
 from .proxy import *
 from .exceptions import InvalidConfig
-from .helpers import parse_addr
+from .helpers import parse_addr, RandomInt
 
 
 CONFIG_FILE = 'config.yml'
@@ -24,8 +24,6 @@ UPSTREAM_TIMEOUT = 5000
 HTTP_TIMEOUT = 10000
 
 HTTP_HOST = '127.0.0.1'
-
-HTTP_PORT = 8964
 
 CACHE_MAX_SIZE = 4096
 
@@ -479,9 +477,9 @@ DEFAULT_CONFIG = {
     },
     'http': {
         'host': HTTP_HOST,
-        'port': HTTP_PORT,
+        'port': RandomInt(1024, 65535),
         'timeout': HTTP_TIMEOUT,
-        'static_files': 'webui',
+        'static_files': 'dashboard/public',
         'disable': False,
     },
     'middlewares': ['cache'],

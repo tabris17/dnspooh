@@ -1,4 +1,5 @@
 import urllib.parse
+import random
 
 
 def split_domain(name, reverse=True):
@@ -31,3 +32,12 @@ def parse_addr(default_host, default_port, addr):
         result.hostname or default_host, 
         result.port or default_port
     )
+
+
+class RandomInt:
+    def __init__(self, begin, end):
+        self.begin = begin
+        self.end = end
+
+    def __int__(self):
+        return random.randrange(self.begin, self.end)
