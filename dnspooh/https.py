@@ -397,6 +397,8 @@ class Server:
                 writer.write(response.headers.as_bytes())
             await writer.drain()
             response.is_sent = True
+        except asyncio.CancelledError:
+            raise
         except:
             raise IOError('Response begin sending and an error occurred')
         finally:
@@ -410,8 +412,8 @@ class Server:
             start_line, req.headers, req.body = await _read_http_message(reader, self.MAX_REQUEST_SIZE)
             method, req.url, req.version = start_line.split(' ', 2)
             req.method = HTTPMethod(method)
-        except HttpException as exc:
-            raise exc
+        except (HttpException, asyncio.CancelledError):
+            raise
         except:
             raise HttpException('Invalid request')
         return req
@@ -446,34 +448,33 @@ class Server:
     async def on_connect(self, reader, writer):
         peername = writer.transport.get_extra_info('peername')
         logger.debug('Connection from %s', s_addr(peername))
-        while not writer.transport.is_closing():
-            try:
-                request = await asyncio.wait_for(self._read_request(reader), self.timeout_sec)
-                logger.debug('Request received from "%s": %s', s_addr(peername), request)
-            except HttpException as exc:
-                await self._respond(writer, await self.on_error(400))
-                break
-            except (TimeoutError, asyncio.exceptions.TimeoutError, EOFError, IOError):
-                writer.transport.abort()
-                break
-            except Exception as exc:
-                await self._respond(writer, await self.on_error(500))
-                logger.warning('Server error: %s', exc)
-                break
-
-            try:
-                response = await self._respond(writer, await self.on_request(request))
-                logger.debug('Response sent to "%s": %s', s_addr(peername), response)
-            except (TimeoutError, asyncio.exceptions.TimeoutError, EOFError, IOError):
-                writer.transport.abort()
-                break
-            except Exception as exc:
-                if response.is_sent:
-                    writer.transport.abort()
-                else:
+        try:
+            while not writer.transport.is_closing():
+                try:
+                    request = await asyncio.wait_for(self._read_request(reader), self.timeout_sec)
+                    logger.debug('Request received from "%s": %s', s_addr(peername), request)
+                except HttpException as exc:
+                    await self._respond(writer, await self.on_error(400))
+                    break
+                except Exception as exc:
                     await self._respond(writer, await self.on_error(500))
-                logger.warning('Server error: %s', exc)
-                break
+                    logger.warning('Server error on request: %s', exc)
+                    break
+
+                try:
+                    response = await self._respond(writer, await self.on_request(request))
+                    logger.debug('Response sent to "%s": %s', s_addr(peername), response)
+                except Exception as exc:
+                    if response.is_sent:
+                        writer.transport.abort()
+                    else:
+                        await self._respond(writer, await self.on_error(500))
+                    logger.warning('Server error on response: %s', exc)
+                    break
+        except (TimeoutError, asyncio.exceptions.TimeoutError, EOFError, IOError):
+            writer.transport.abort()
+        except asyncio.CancelledError:
+            logger.debug('Connection from %s has been cancelled', s_addr(peername))
 
     async def run(self):
         http_config = self.config['http']
