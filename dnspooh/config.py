@@ -479,7 +479,6 @@ DEFAULT_CONFIG = {
         'host': HTTP_HOST,
         'port': RandomInt(1024, 65535),
         'timeout': HTTP_TIMEOUT,
-        'static_files': 'dashboard/public',
         'disable': False,
     },
     'middlewares': ['cache'],

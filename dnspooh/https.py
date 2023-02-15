@@ -212,6 +212,7 @@ class Request:
 class Response:
     def __init__(self, status=200):
         self._status = HTTPStatus(status)
+        self.is_sent = False
         self.reason = self._status.name
         self.version = HTTP_VERSION
         self.headers = HttpMessage(email.policy.HTTP)
@@ -385,6 +386,7 @@ class Server:
                     writer.write(response.headers.as_bytes())
                     await writer.drain()
                     await self.loop.sendfile(writer.transport, fp)
+                response.is_sent = True
                 return response
             elif response.body:
                 response.headers.set_header('Content-Length', len(response.body))
@@ -394,10 +396,12 @@ class Server:
                 del response.headers['Content-Length']
                 writer.write(response.headers.as_bytes())
             await writer.drain()
-            if response.headers.is_closing():
-                writer.abort()
+            response.is_sent = True
         except:
             raise IOError('Response begin sending and an error occurred')
+        finally:
+            if response.headers.is_closing():
+                writer.transport.abort()
         return response
         
     async def _read_request(self, reader):
@@ -408,14 +412,15 @@ class Server:
             req.method = HTTPMethod(method)
         except HttpException as exc:
             raise exc
-        except Exception as exc:
-            logger.info(exc)
+        except:
             raise HttpException('Invalid request')
         return req
 
-    def _resolve_static_file(self, path):
-        file_path = self.static_files.joinpath('.' + path)
+    def _attempt_static_file(self, path):
+        if not self.static_files:
+            return False
 
+        file_path = self.static_files.joinpath('.' + path)
         if file_path.is_dir():
             for default_file in self.DEFAULT_FILES:
                 file_path = file_path.joinpath(default_file)
@@ -427,7 +432,7 @@ class Server:
         return False
 
     async def on_request(self, request):
-        static_file = self._resolve_static_file(request.path)
+        static_file = self._attempt_static_file(request.path)
         if static_file:
             return FileResponse(static_file)
         return await (self._request_handler)(request)
@@ -445,18 +450,28 @@ class Server:
             try:
                 request = await asyncio.wait_for(self._read_request(reader), self.timeout_sec)
                 logger.debug('Request received from "%s": %s', s_addr(peername), request)
-                response = await self._respond(writer, await self.on_request(request))
-                logger.debug('Response sent to "%s": %s', s_addr(peername), response)
-            except HttpException:
+            except HttpException as exc:
                 await self._respond(writer, await self.on_error(400))
-                writer.transport.close()
                 break
             except (TimeoutError, asyncio.exceptions.TimeoutError, EOFError, IOError):
-                writer.transport.close()
+                writer.transport.abort()
                 break
             except Exception as exc:
                 await self._respond(writer, await self.on_error(500))
-                writer.transport.close()
+                logger.warning('Server error: %s', exc)
+                break
+
+            try:
+                response = await self._respond(writer, await self.on_request(request))
+                logger.debug('Response sent to "%s": %s', s_addr(peername), response)
+            except (TimeoutError, asyncio.exceptions.TimeoutError, EOFError, IOError):
+                writer.transport.abort()
+                break
+            except Exception as exc:
+                if response.is_sent:
+                    writer.transport.abort()
+                else:
+                    await self._respond(writer, await self.on_error(500))
                 logger.warning('Server error: %s', exc)
                 break
 
@@ -464,10 +479,14 @@ class Server:
         http_config = self.config['http']
         if http_config.get('disable'):
             return
-        static_files = pathlib.Path(http_config['static_files'])
-        if not static_files.is_dir():
-            raise InvalidConfig('%s is not a directory' % (static_files, ))
-        self.static_files = static_files
+        static_files = http_config.get('static_files')
+        if static_files:
+            static_files_path = pathlib.Path(http_config['static_files'])
+            if not static_files_path.is_dir():
+                raise InvalidConfig('%s is not a directory' % static_files_path)
+            self.static_files = static_files_path
+        else:
+            self.static_files = None
         host = http_config['host']
         port = int(http_config['port'])
         if host != '127.0.0.1' and host != 'localhost':
