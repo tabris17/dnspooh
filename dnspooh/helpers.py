@@ -1,3 +1,4 @@
+import enum
 import urllib.parse
 import random
 
@@ -41,3 +42,9 @@ class RandomInt:
 
     def __int__(self):
         return random.randrange(self.begin, self.end)
+
+
+class Scheme(enum.Enum):
+    tcp = enum.auto()
+    tls = enum.auto()
+    udp = enum.auto()

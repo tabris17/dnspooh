@@ -63,7 +63,7 @@ async def startup():
         loop.set_exception_handler(lambda _, context: logger.warning(context['message']))
 
         main_server = server.Server(config, loop)
-        http_server = https.Server(config, None, loop)
+        http_server = https.Server(config, main_server.handle_http_request, loop)
 
         await asyncio.gather(main_server.run(), http_server.run())
     except asyncio.CancelledError:

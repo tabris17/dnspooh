@@ -4,7 +4,7 @@ import logging
 
 import certifi
 
-from .scheme import Scheme
+from .helpers import Scheme
 
 
 logger = logging.getLogger(__name__)

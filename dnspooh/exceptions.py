@@ -7,12 +7,12 @@ class InvalidConfig(Exception): pass
 
 class HttpException(Exception): pass
 
-class HttpHeaderTooLarge(HttpException): pass
+class HttpHeaderTooLarge(HttpException): CODE = 431
 
-class HttpPayloadTooLarge(HttpException): pass
+class HttpPayloadTooLarge(HttpException): CODE = 413
 
-class HttpNotFound(HttpException): pass
+class HttpNotFound(HttpException): CODE = 404
 
-class HttpMethodNotAllowed(HttpException): pass
+class HttpMethodNotAllowed(HttpException): CODE = 405
 
 class NetworkError(RuntimeError): pass

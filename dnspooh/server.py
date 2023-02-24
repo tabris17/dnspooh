@@ -14,14 +14,14 @@ from dnslib import DNSRecord, DNSError, DNSHeader
 
 from . import https
 from . import middlewares
+from . import version
 from .config import DnsUpstream, HttpsUpstream, TlsUpstream
 from .pool import Pool
-from .scheme import Scheme
 from .exceptions import *
 from .stats import Stats
 from .upstream import UpstreamCollection
 from .proxy import parse_proxy
-from .helpers import s_addr
+from .helpers import s_addr, Scheme
 
 
 logger = logging.getLogger(__name__)
@@ -447,3 +447,19 @@ class Server:
         result = self.open_geoip().get(ip)
         _country = result['country']['iso_code'] if result else None
         return country.upper() == _country
+
+    async def handle_http_request(self, request):
+        match request.method, request.path:
+            case https.HTTPMethod.GET, '/':
+                return https.Response(body='Dnspooh is working')
+            case https.HTTPMethod.GET, '/status': 
+                return self._status()
+            case https.HTTPMethod.POST, '/stop': 
+                return self._stop(request)
+            case https.HTTPMethod.POST, '/restart': 
+                return self._start(request)
+            case https.HTTPMethod.GET, '/version':
+                return https.JsonResponse({
+                    'version': version.__version__
+                })
+        raise HttpNotFound()

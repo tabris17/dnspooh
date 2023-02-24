@@ -4,8 +4,7 @@ import ipaddress
 
 from urllib.parse import urlsplit
 
-from .scheme import Scheme
-from .helpers import s_addr
+from .helpers import s_addr, Scheme
 
 
 DEFAULT_HTTP_PROXY_PORT = 8080

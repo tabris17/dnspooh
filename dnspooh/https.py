@@ -18,9 +18,8 @@ from http import HTTPStatus
 from http.client import HTTPMessage
 from urllib.parse import urlencode, urlsplit, parse_qs, quote
 
-from .scheme import Scheme
 from .exceptions import HttpException, HttpHeaderTooLarge, HttpPayloadTooLarge, HttpNotFound, InvalidConfig
-from .helpers import s_addr
+from .helpers import s_addr, Scheme
 
 
 HTTP_VERSION = 'HTTP/1.1'
@@ -210,13 +209,17 @@ class Request:
 
 
 class Response:
-    def __init__(self, status=200):
-        self._status = HTTPStatus(status)
+    def __init__(self, status=HTTPStatus.OK, body=None):
+        if not isinstance(status, HTTPStatus):
+            status = HTTPStatus(status)
+        if isinstance(body, str):
+            body = body.encode()
+        self._status = status
         self.is_sent = False
         self.reason = self._status.name
         self.version = HTTP_VERSION
         self.headers = HttpMessage(email.policy.HTTP)
-        self.body = None
+        self.body = body
 
     @property
     def status(self):
@@ -453,23 +456,21 @@ class Server:
                 try:
                     request = await asyncio.wait_for(self._read_request(reader), self.timeout_sec)
                     logger.debug('Request received from "%s": %s', s_addr(peername), request)
+                    response = await self.on_request(request)
                 except HttpException as exc:
-                    await self._respond(writer, await self.on_error(400))
+                    await self._respond(writer, await self.on_error(exc.CODE))
                     break
                 except Exception as exc:
-                    await self._respond(writer, await self.on_error(500))
-                    logger.warning('Server error on request: %s', exc)
+                    await self._respond(writer, await self.on_error(HTTPStatus.INTERNAL_SERVER_ERROR))
+                    logger.info('Server error on request: %s', exc)
                     break
 
                 try:
-                    response = await self._respond(writer, await self.on_request(request))
+                    await self._respond(writer, await self.on_request(request))
                     logger.debug('Response sent to "%s": %s', s_addr(peername), response)
                 except Exception as exc:
-                    if response.is_sent:
-                        writer.transport.abort()
-                    else:
-                        await self._respond(writer, await self.on_error(500))
-                    logger.warning('Server error on response: %s', exc)
+                    logger.info('Server error on response: %s', exc)
+                    writer.transport.abort()
                     break
         except (TimeoutError, asyncio.exceptions.TimeoutError, EOFError, IOError):
             writer.transport.abort()
