@@ -460,6 +460,8 @@ class Server:
                 except HttpException as exc:
                     await self._respond(writer, await self.on_error(exc.CODE))
                     break
+                except (TimeoutError, asyncio.TimeoutError, EOFError, IOError, asyncio.CancelledError):
+                    raise
                 except Exception as exc:
                     await self._respond(writer, await self.on_error(HTTPStatus.INTERNAL_SERVER_ERROR))
                     logger.info('Server error on request: %s', exc)
@@ -468,11 +470,13 @@ class Server:
                 try:
                     await self._respond(writer, await self.on_request(request))
                     logger.debug('Response sent to "%s": %s', s_addr(peername), response)
+                except (TimeoutError, asyncio.TimeoutError, EOFError, IOError, asyncio.CancelledError):
+                    raise
                 except Exception as exc:
                     logger.info('Server error on response: %s', exc)
                     writer.transport.abort()
                     break
-        except (TimeoutError, asyncio.exceptions.TimeoutError, EOFError, IOError):
+        except (TimeoutError, asyncio.TimeoutError, EOFError, IOError):
             writer.transport.abort()
         except asyncio.CancelledError:
             logger.debug('Connection from %s has been cancelled', s_addr(peername))
