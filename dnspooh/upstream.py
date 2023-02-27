@@ -78,6 +78,9 @@ class UpstreamCollection:
     def __contains__(self, name):
         return name in self._named
 
+    def to_json(self):
+        return self.sorted()
+
 
 class Upstream:
     def __init__(self, **kwargs):
@@ -96,7 +99,10 @@ class Upstream:
         self.disable = False
 
     def __repr__(self):
-        return str(vars(self))
+        return str(self._get_vars())
+    
+    def to_json(self):
+        return self._get_vars()
 
     def to_addr(self):
         return (self.host, self.port)
@@ -121,13 +127,13 @@ class DnsUpstream(Upstream):
         super().__init__(**kwargs)
         self.host = kwargs['host']
         self.port = kwargs.get('port', DEFAULT_DNS_PORT)
-
-    def __repr__(self):
-        return str(super()._get_vars() | {
+    
+    def _get_vars(self):
+        return super()._get_vars() | {
             'host': self.host,
             'port': self.port,
             'type': 'dns',
-        })
+        }
 
 
 class HttpsUpstream(Upstream):
@@ -143,12 +149,12 @@ class HttpsUpstream(Upstream):
             self.host = None
         self.port = parsed_url.port if parsed_url.port else DEFAULT_HTTPS_PORT
         self.path = parsed_url.path
-
-    def __repr__(self):
-        return str(super()._get_vars() | {
+    
+    def _get_vars(self):
+        return super()._get_vars() | {
             'url': self.url,
             'type': 'doh',
-        })
+        }
 
 
 class TlsUpstream(Upstream):
@@ -161,13 +167,13 @@ class TlsUpstream(Upstream):
         except ValueError:
             self.host = None
         self.port = kwargs.get('port', DEFAULT_DOT_PORT)
-
-    def __repr__(self):
-        return str(super()._get_vars() | {
+    
+    def _get_vars(self):
+        return super()._get_vars() | {
             'host': self.hostname,
             'port': self.port,
             'type': 'dot',
-        })
+        }
 
 
 def parse_upstream(server):

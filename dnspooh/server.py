@@ -452,14 +452,12 @@ class Server:
         match request.method, request.path:
             case https.HTTPMethod.GET, '/':
                 return https.Response(body='Dnspooh is working')
-            case https.HTTPMethod.GET, '/status': 
-                return self._status()
-            case https.HTTPMethod.POST, '/stop': 
-                return self._stop(request)
-            case https.HTTPMethod.POST, '/restart': 
-                return self._start(request)
             case https.HTTPMethod.GET, '/version':
                 return https.JsonResponse({
                     'version': version.__version__
+                })
+            case https.HTTPMethod.GET, '/status':
+                return https.JsonResponse({
+                    'upstreams': self.upstreams,
                 })
         raise HttpNotFound()

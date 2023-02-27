@@ -22,6 +22,9 @@ class Proxy:
 
     def __repr__(self):
         return self.url
+    
+    def to_json(self):
+        return self.__repr__()
 
     def has_auth(self):
         return self.username is not None and \

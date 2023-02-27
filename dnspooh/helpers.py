@@ -1,6 +1,7 @@
 import enum
 import urllib.parse
 import random
+import json
 
 
 def split_domain(name, reverse=True):
@@ -48,3 +49,10 @@ class Scheme(enum.Enum):
     tcp = enum.auto()
     tls = enum.auto()
     udp = enum.auto()
+
+
+class JsonEncoder(json.JSONEncoder):
+    def default(self, o):
+        if hasattr(o, 'to_json'):
+            return o.to_json()
+        return super().default(o)

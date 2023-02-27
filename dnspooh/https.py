@@ -19,7 +19,7 @@ from http.client import HTTPMessage
 from urllib.parse import urlencode, urlsplit, parse_qs, quote
 
 from .exceptions import HttpException, HttpHeaderTooLarge, HttpPayloadTooLarge, HttpNotFound, InvalidConfig
-from .helpers import s_addr, Scheme
+from .helpers import s_addr, Scheme, JsonEncoder
 
 
 HTTP_VERSION = 'HTTP/1.1'
@@ -262,7 +262,7 @@ class FileResponse(Response):
 class JsonResponse(Response):
     def __init__(self, payload):
         super().__init__(200)
-        self.body = json.dumps(payload).encode()
+        self.body = json.dumps(payload, cls=JsonEncoder).encode()
         self.headers.add_header('Content-Type', 'application/json', charset='utf-8')
 
     def __repr__(self):
