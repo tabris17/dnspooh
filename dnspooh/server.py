@@ -301,7 +301,7 @@ class Server:
             if self.upstreams.has_group(upstream_group):
                 return self.upstreams.group(upstream_group)
             logger.warning('Upstream group %s not defined', upstream_group)
-        return self.upstreams.sorted()
+        return self.upstreams.sorted
 
     async def handle(self, request, **kwargs):
         logger.debug('DNS query:\n%s', request)
@@ -456,8 +456,18 @@ class Server:
                 return https.JsonResponse({
                     'version': version.__version__
                 })
-            case https.HTTPMethod.GET, '/status':
+            case https.HTTPMethod.GET, '/upstreams':
                 return https.JsonResponse({
                     'upstreams': self.upstreams,
+                    'primary': self.upstreams.primary,
                 })
+            case https.HTTPMethod.POST, '/upstreams/primary':
+                return self._handle_select_primary_upstream(request)
         raise HttpNotFound()
+
+    @https.json_handler
+    def _handle_select_primary_upstream(self, name):
+        self.upstreams.select(name)
+        return https.JsonResponse({
+            'result': True,
+        })

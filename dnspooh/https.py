@@ -18,7 +18,7 @@ from http import HTTPStatus
 from http.client import HTTPMessage
 from urllib.parse import urlencode, urlsplit, parse_qs, quote
 
-from .exceptions import HttpException, HttpHeaderTooLarge, HttpPayloadTooLarge, HttpNotFound, InvalidConfig
+from .exceptions import HttpException, HttpHeaderTooLarge, HttpPayloadTooLarge, InvalidConfig
 from .helpers import s_addr, Scheme, JsonEncoder
 
 
@@ -118,6 +118,17 @@ class Request:
         if self.form and name in self.form:
             return self.form[name]
         return []
+    
+    def is_json(self):
+        return self._is_json
+
+    def json(self):
+        if not self.is_json():
+            return
+        try:
+            return json.loads(self._body)
+        except json.JSONDecodeError:
+            pass
 
     @property
     def body(self):
@@ -158,7 +169,7 @@ class Request:
         if not isinstance(value, bytes):
             raise TypeError('Response body must be bytes type, %s given' % (type(value), ))
 
-        raw_content_type = self.headers.get('Conetent-Type')
+        raw_content_type = self.headers.get('Content-Type')
         content_type = parse_content_type(raw_content_type)
         media_type = content_type.media_type
         charset = content_type.charset
@@ -168,6 +179,8 @@ class Request:
             self.form = parse_qs(decoded_body)
         elif media_type == 'multipart/form-data':
             self._parse_post_data(value)
+        elif media_type == 'application/json':
+            self._is_json = True
         self._body = value
 
     def __init__(self):
@@ -176,6 +189,7 @@ class Request:
         self.version = HTTP_VERSION
         self.headers = HttpMessage(email.policy.HTTP)
         self._body = None
+        self._is_json = False
         self.query_string = None
         self.path = None
         self.query = None
@@ -242,8 +256,8 @@ class Response:
 
 
 class FileResponse(Response):
-    def __init__(self, file):
-        super().__init__()
+    def __init__(self, file, status=HTTPStatus.OK):
+        super().__init__(status)
         self.file = file
 
     @property
@@ -260,8 +274,8 @@ class FileResponse(Response):
 
 
 class JsonResponse(Response):
-    def __init__(self, payload):
-        super().__init__(200)
+    def __init__(self, payload, status=HTTPStatus.OK):
+        super().__init__(status)
         self.body = json.dumps(payload, cls=JsonEncoder).encode()
         self.headers.add_header('Content-Type', 'application/json', charset='utf-8')
 
@@ -621,3 +635,45 @@ async def fetch(url, resolver, pool, proxy=None, **kwargs):
         else:
             body = kwargs.get('body')
             return await Client(hostname, conn).post(url_path, headers=headers, body=body)
+
+
+class JSONError(enum.Enum):
+    INVALID_JSON = 1, 'Invalid JSON entity'
+
+    def __new__(cls, code, message):
+        obj = object.__new__(cls)
+        obj.code = code
+        obj.message = message
+        return obj
+    
+    def to_json(self):
+        return {
+            'error': {
+                'code': self.code,
+                'message': self.message,
+            }
+        }
+
+
+def json_handler(func):
+    def _handle(self, request):
+        if not request.is_json():
+            raise HttpException()
+
+        try:
+            return func(self, **request.json())
+        except TypeError:
+            return JsonResponse(JSONError.INVALID_JSON, HTTPStatus.BAD_REQUEST)
+    return _handle
+
+
+def async_json_handler(func):
+    async def _handle(self, request):
+        if not request.is_json():
+            raise HttpException()
+
+        try:
+            return await func(self, **request.json())
+        except TypeError:
+            return JsonResponse(JSONError.INVALID_JSON, HTTPStatus.BAD_REQUEST)
+    return _handle

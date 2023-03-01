@@ -59,6 +59,7 @@ class UpstreamCollection:
     def has_group(self, name):
         return name in self._grouped
 
+    @property
     def sorted(self):
         if self._sorted is None:
             self.sort()
@@ -79,7 +80,7 @@ class UpstreamCollection:
         return name in self._named
 
     def to_json(self):
-        return self.sorted()
+        return self.sorted
 
 
 class Upstream:

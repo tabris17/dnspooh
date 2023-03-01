@@ -5,7 +5,7 @@ class UnexpectedValueError(ValueError): pass
 
 class InvalidConfig(Exception): pass
 
-class HttpException(Exception): pass
+class HttpException(Exception): CODE = 400
 
 class HttpHeaderTooLarge(HttpException): CODE = 431
 
