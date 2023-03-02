@@ -108,14 +108,18 @@ class Upstream:
     def to_addr(self):
         return (self.host, self.port)
 
-    def health(self, threshold):
-        pass
+    @property
+    def health(self):
+        if self.usage == 0:
+            return -1
+        return int((self.success / self.usage) * 100)
 
     def _get_vars(self):
         _vars = {
             'name': self.name,
             'priority': self.priority,
             'disable': self.disable,
+            'health': self.health,
         }
         if self.timeout_sec is not None: _vars['timeout'] = self.timeout_sec
         if self.proxy is not None: _vars['proxy'] = self.proxy

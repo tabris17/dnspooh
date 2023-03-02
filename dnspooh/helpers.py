@@ -46,9 +46,9 @@ class RandomInt:
 
 
 class Scheme(enum.Enum):
-    tcp = enum.auto()
-    tls = enum.auto()
-    udp = enum.auto()
+    TCP = enum.auto()
+    TLS = enum.auto()
+    UDP = enum.auto()
 
 
 class JsonEncoder(json.JSONEncoder):

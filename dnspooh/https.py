@@ -602,10 +602,10 @@ async def fetch(url, resolver, pool, proxy=None, **kwargs):
     parsed_url = urlsplit(url)
     hostname = parsed_url.hostname
     if parsed_url.scheme == 'http':
-        scheme = Scheme.tcp
+        scheme = Scheme.TCP
         port = parsed_url.port if parsed_url.port else DEFAULT_HTTP_PORT
     elif parsed_url.scheme == 'https':
-        scheme = Scheme.tls
+        scheme = Scheme.TLS
         port = parsed_url.port if parsed_url.port else DEFAULT_HTTPS_PORT
     else:
         raise ValueError('Invalid url scheme %s' % (parsed_url.scheme, ))

@@ -125,7 +125,7 @@ class Pool:
         logger.debug('Remove "%s" from connection pool', conn.name)
 
     async def connect(self, host, port, 
-                      scheme=Scheme.tcp, proxy=None, 
+                      scheme=Scheme.TCP, proxy=None, 
                       limit=DEFAULT_LIMIT, pooled=True, **kwds):
         conn_name = _make_conn_name(host, port, scheme, proxy)
         conn = self.get(conn_name)
@@ -141,7 +141,7 @@ class Pool:
             except OSError as exc:
                 raise ConnectionError('Cannot connect to proxy "%s:%d": %s' % (proxy.host, proxy.port, exc))
             writer = asyncio.StreamWriter(transport, protocol, reader, self.loop)
-            if scheme == Scheme.udp:
+            if scheme == Scheme.UDP:
                 conn = Connection(
                     conn_name, reader, writer, 
                     await proxy.make_udp_tunnel(reader, writer, (host, port))
@@ -150,7 +150,7 @@ class Pool:
                 return conn
             if not await proxy.handshake(reader, writer, (host, port)):
                 raise ConnectionError('Failed to handshake with proxy "%s"' % (proxy.url, ))
-        elif scheme == Scheme.udp:
+        elif scheme == Scheme.UDP:
             raise ConnectionError('Naked UDP protocol does not supported')
         else:
             try:
@@ -160,7 +160,7 @@ class Pool:
                 raise ConnectionError('Cannot connect to server "%s:%d": %s' % (host, port, exc))
             writer = asyncio.StreamWriter(transport, protocol, reader, self.loop)
 
-        if scheme == Scheme.tls:
+        if scheme == Scheme.TLS:
             try:
                 ssl_context = ssl.create_default_context(cafile=certifi.where())
                 transport = await self.loop.start_tls(transport, protocol, ssl_context)

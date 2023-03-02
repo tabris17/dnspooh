@@ -74,12 +74,12 @@ class QueryProtocol(asyncio.DatagramProtocol):
 
 class Server:
     class Status(enum.Enum):
-        initialized = enum.auto()
-        start_pedding = enum.auto()
-        running = enum.auto()
-        restart_pedding = enum.auto()
-        stop_pedding = enum.auto()
-        stopped = enum.auto()
+        INITIALIZED = enum.auto()
+        START_PEDDING = enum.auto()
+        RUNNING = enum.auto()
+        RESTART_PEDDING = enum.auto()
+        STOP_PEDDING = enum.auto()
+        STOPPED = enum.auto()
 
     def __init__(self, config, loop=None):
         self.config = config
@@ -88,7 +88,7 @@ class Server:
         self.abort_event = asyncio.Event()
         self.middlewares = self._create_middlewares()
         self.stats = Stats(config['stats.max_size'])
-        self.status = self.Status.initialized
+        self.status = self.Status.INITIALIZED
         self.tasks = []
         self.transports = []
         logger.debug('DNS serivce initialized')
@@ -209,7 +209,7 @@ class Server:
                 conn = await self.pool.connect(
                     upstream.host, 
                     upstream.port, 
-                    Scheme.udp, 
+                    Scheme.UDP, 
                     proxy
                 )
             except ConnectionError as exc:
@@ -246,7 +246,7 @@ class Server:
             with await self.pool.connect(
                 upstream.host, 
                 upstream.port, 
-                Scheme.tls, 
+                Scheme.TLS, 
                 proxy
             ) as conn:
                 q = base64.b64encode(query).decode().rstrip('=')
@@ -265,7 +265,7 @@ class Server:
             with await self.pool.connect(
                 upstream.host, 
                 upstream.port, 
-                Scheme.tls, 
+                Scheme.TLS, 
                 proxy
             ) as conn:
                 query_size = struct.pack('!H', len(query))
@@ -379,15 +379,15 @@ class Server:
         task.add_done_callback(functools.partial(self.on_response, transport, request, addr))
 
     def abort(self):
-        self.status = self.Status.stop_pedding
+        self.status = self.Status.STOP_PEDDING
         logger.info('DNS serivce aborted')
         return self.abort_event.set()
 
     async def restart(self, silent=False):
-        self.status = self.Status.restart_pedding
+        self.status = self.Status.RESTART_PEDDING
         if not silent: logger.info('Restarting service')
         # TODO:
-        self.status = self.Status.running
+        self.status = self.Status.RUNNING
         if not silent: logger.info('DNS service restarted')
 
     def on_error_reset(self, transport):
@@ -403,7 +403,7 @@ class Server:
 
     async def run(self):
         try:
-            self.status = self.Status.start_pedding
+            self.status = self.Status.START_PEDDING
             if not await self.middlewares.bootstrap():
                 logger.error('Failed to bootstrap')
                 return
@@ -420,7 +420,7 @@ class Server:
                     logger.error('Failed to start DNS service: %s', exc)
                     return
 
-            self.status = self.Status.running
+            self.status = self.Status.RUNNING
             logger.info('DNS serivce started')
 
             try:
@@ -428,7 +428,7 @@ class Server:
             except asyncio.CancelledError:
                 logger.debug('DNS serivce interrupted')
             finally:
-                self.status = self.Status.stopped
+                self.status = self.Status.STOPPED
                 logger.info('DNS serivce stopped')
         finally:
             for transport in self.transports:
