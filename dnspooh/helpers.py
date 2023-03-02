@@ -36,6 +36,17 @@ def parse_addr(default_host, default_port, addr):
     )
 
 
+def flat_dict(d, key_prefix='', key_sep='.'):
+    flatten = []
+    for k, v in d.items():
+        _k = key_prefix + key_sep + k
+        if isinstance(v, dict):
+            flatten.extend(flat_dict(v, _k, key_sep))
+        else:
+            flatten.append((_k[1:], v))
+    return flatten
+
+
 class RandomInt:
     def __init__(self, begin, end):
         self.begin = begin
@@ -43,6 +54,9 @@ class RandomInt:
 
     def __int__(self):
         return random.randrange(self.begin, self.end)
+    
+    def to_json(self):
+        return 'random'
 
 
 class Scheme(enum.Enum):

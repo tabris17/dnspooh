@@ -27,6 +27,9 @@ from .helpers import s_addr, Scheme
 logger = logging.getLogger(__name__)
 
 
+TEST_DOMAIN = 'www.google.com'
+
+
 class ServerProtocol(asyncio.DatagramProtocol):
     def __init__(self, server):
         super().__init__()
@@ -138,25 +141,32 @@ class Server:
                 for hostname_upstream in hostname_upstreams
         ])
 
-        await self.test_upstreams('google.com')
+        await self.test_all_upstreams(TEST_DOMAIN)
         return True
 
-    async def test_upstreams(self, hostname):
+    async def test_upstream(self, upstream, hostname):
         request = DNSRecord.question(hostname)
-        async def test_upstream(upstream):
-            start_counter = time.perf_counter()
-            response = await self.handle(request, upstreams=[upstream])
-            elapsed_time_sec = time.perf_counter() - start_counter
-            if not response or response.header.a == 0:
-                upstream.disable = True
-                upstream.priority = -1
-                logger.warning('Test upstream %s failed', upstream.name)
-            else:
-                timeout_sec = self._get_timeout(upstream)
-                upstream.priority = int(max(0, timeout_sec - elapsed_time_sec) / timeout_sec * 1000)
-                logger.info('Test upstream %s passed, responding speed: %d', upstream.name, upstream.priority)
+        start_counter = time.perf_counter()
+        response = await self.handle(request, upstreams=[upstream])
+        elapsed_time_sec = time.perf_counter() - start_counter
+        if not response or response.header.a == 0:
+            upstream.disable = True
+            upstream.priority = -1
+            logger.warning('Test upstream %s failed', upstream.name)
+            return False
+        timeout_sec = self._get_timeout(upstream)
+        upstream.priority = int(max(0, timeout_sec - elapsed_time_sec) / timeout_sec * 1000)
+        upstream.disable = False
+        logger.info('Test upstream %s passed, responding speed: %d', upstream.name, upstream.priority)
+        return True
 
-        await asyncio.gather(*[test_upstream(_) for _ in self.upstreams.all() if not _.disable])
+    async def test_all_upstreams(self, hostname, include_disabled=False):
+        queries = [
+            self.test_upstream(upstream, hostname) 
+            for upstream in self.upstreams.all() 
+            if include_disabled or not upstream.disable
+        ]
+        await asyncio.gather(*queries)
         self.upstreams.sort()
         primary_upstream = self.upstreams.primary
         if primary_upstream.disable:
@@ -288,28 +298,37 @@ class Server:
     def _get_timeout(self, upstream):
         return self.timeout_sec if upstream.timeout_sec is None else upstream.timeout_sec
 
-    def _get_upstreams(self, **kwargs):
+    def _get_upstreams(self, kwargs):
+        customized_upstreams = []
         if 'upstreams' in kwargs:
-            return kwargs['upstreams']
-        elif 'upstream_name' in kwargs:
+            customized_upstreams.extend(kwargs['upstreams'])
+        if 'upstream' in kwargs:
+            customized_upstreams.append(kwargs['upstream'])
+        if 'upstream_name' in kwargs:
             upstream_name = kwargs['upstream_name']
             if upstream_name in self.upstreams:
-                return list(self.upstreams[upstream_name])
-            logger.warning('Upstream name %s not defined', upstream_name)
-        elif 'upstream_group' in kwargs:
+                customized_upstreams.append(self.upstreams[upstream_name])
+            else:
+                logger.warning('Upstream name %s not defined', upstream_name)
+        if 'upstream_group' in kwargs:
             upstream_group = kwargs['upstream_group']
             if self.upstreams.has_group(upstream_group):
-                return self.upstreams.group(upstream_group)
-            logger.warning('Upstream group %s not defined', upstream_group)
+                customized_upstreams.extend(self.upstreams.group(upstream_group))
+            else:
+                logger.warning('Upstream group %s not defined', upstream_group)
+        if customized_upstreams:
+            kwargs['customized_upstreams'] = True
+            return customized_upstreams
         return self.upstreams.sorted
 
     async def handle(self, request, **kwargs):
         logger.debug('DNS query:\n%s', request)
         data = request.pack()
 
-        for upstream in self._get_upstreams(**kwargs):
+        for upstream in self._get_upstreams(kwargs):
             proxy = self._get_proxy(upstream, **kwargs)
-            if upstream.disable: continue
+            if upstream.disable and 'customized_upstreams' not in kwargs:
+                continue
             if isinstance(upstream, DnsUpstream):
                 resolver = self._resolve_by_dns
             elif isinstance(upstream, HttpsUpstream):
@@ -463,11 +482,38 @@ class Server:
                 })
             case https.HTTPMethod.POST, '/upstreams/primary':
                 return self._handle_select_primary_upstream(request)
+            case https.HTTPMethod.POST, '/upstreams/test':
+                return await self._handle_test_upstream(request)
+            case https.HTTPMethod.POST, '/upstreams/test-all':
+                return await self._handle_test_all_upstream()
+            case https.HTTPMethod.GET, '/pool':
+                return https.JsonResponse({
+                    'pool': self.pool,
+                })
+            case https.HTTPMethod.GET, '/config':
+                return https.JsonResponse({
+                    'config': self.config,
+                })
         raise HttpNotFound()
 
     @https.json_handler
     def _handle_select_primary_upstream(self, name):
         self.upstreams.select(name)
+        return https.JsonResponse({
+            'result': True,
+        })
+    
+    @https.async_json_handler
+    async def _handle_test_upstream(self, name):
+        if name not in self.upstreams:
+            return https.JsonResponse(https.JSONError.ILLEGAL_PARAM, 
+                                      https.HTTPStatus.BAD_REQUEST) 
+        return https.JsonResponse({
+            'result': await self.test_upstream(self.upstreams[name], TEST_DOMAIN),
+        })
+    
+    async def _handle_test_all_upstream(self):
+        await self.test_all_upstreams(TEST_DOMAIN, True)
         return https.JsonResponse({
             'result': True,
         })

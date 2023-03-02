@@ -10,7 +10,7 @@ except ImportError:
 from .upstream import *
 from .proxy import *
 from .exceptions import InvalidConfig
-from .helpers import parse_addr, RandomInt
+from .helpers import parse_addr, flat_dict, RandomInt
 
 
 CONFIG_FILE = 'config.yml'
@@ -644,3 +644,10 @@ class Config:
             raise InvalidConfig(exc)
 
         return cls(conf)
+
+    def to_json(self):
+        conf = [{
+            'name': k,
+            'value': v,
+        } for k, v in flat_dict(self.conf)]
+        return conf

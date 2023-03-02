@@ -639,6 +639,7 @@ async def fetch(url, resolver, pool, proxy=None, **kwargs):
 
 class JSONError(enum.Enum):
     INVALID_JSON = 1, 'Invalid JSON entity'
+    ILLEGAL_PARAM = 2, 'Illegal user parameters'
 
     def __new__(cls, code, message):
         obj = object.__new__(cls)

@@ -73,6 +73,9 @@ class Connection:
 
     def abort(self):
         return self.writer.transport.abort()
+    
+    def to_json(self):
+        return self.name
 
 
 class Pool:
@@ -177,7 +180,13 @@ class Pool:
             for conn in conn_set:
                 conn.abort()
 
+    def to_json(self):
+        return [{
+            'name': name,
+            'size': len(conn_set)
+        } for name, conn_set in self.connections.items()]
+
 
 def _make_conn_name(host, port, scheme, proxy):
-    name = '%s://%s:%d' % (scheme.name, host, port)
+    name = '%s://%s:%d' % (scheme.name.lower(), host, port)
     return name if proxy is None else '%s/%s' % (proxy.url, name)
