@@ -494,7 +494,20 @@ class Server:
                 return https.JsonResponse({
                     'config': self.config,
                 })
+            case https.HTTPMethod.GET, '/logs':
+                return self._handle_query_access_log(request)
         raise HttpNotFound()
+    
+    def _handle_query_access_log(self, request):
+        log_middleware = self.middlewares.get_component('log')
+        if not isinstance(log_middleware, middlewares.LogMiddleware):
+            return https.response_json_error('没有启用访问日志中间件')
+
+        page = request.get_int('page', 1)
+        return https.JsonResponse({
+            'total': log_middleware.query_total(),
+            'logs': log_middleware.query_dataset(page),
+        })
 
     @https.json_handler
     def _handle_select_primary_upstream(self, name):
@@ -502,7 +515,7 @@ class Server:
         return https.JsonResponse({
             'result': True,
         })
-    
+
     @https.async_json_handler
     async def _handle_test_upstream(self, name):
         if name not in self.upstreams:
@@ -511,7 +524,7 @@ class Server:
         return https.JsonResponse({
             'result': await self.test_upstream(self.upstreams[name], TEST_DOMAIN),
         })
-    
+
     async def _handle_test_all_upstream(self):
         await self.test_all_upstreams(TEST_DOMAIN, True)
         return https.JsonResponse({

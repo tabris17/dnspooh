@@ -59,7 +59,7 @@ class Middleware:
         if self.name == name:
             return self
         if not hasattr(self.next, self.get_component.__name__):
-            raise ValueError('Middleware %s not found' % (name, ))
+            return
         return self.next.get_component(name)
 
     def initialize(self, next, name):

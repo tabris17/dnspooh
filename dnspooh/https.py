@@ -107,9 +107,23 @@ class FormData:
 class Request:
     def get(self, name, default=None):
         if self.query and name in self.query:
-            return self.query[name].pop()
+            return self.query[name][0]
         if self.form and name in self.form:
-            return self.form[name].pop()
+            return self.form[name][0]
+        return default
+    
+    def get_int(self, name, default=0):
+        try:
+            return int(self.get(name))
+        except TypeError:
+            return default
+
+    def get_list(self, name, default=[]):
+        value = self.get(name)
+        if isinstance(value, list):
+            return value
+        elif value is not None:
+            return [value]
         return default
 
     def get_all(self, name):
@@ -210,7 +224,7 @@ class Request:
             self.query = parse_qs(parsed_url.query)
         else:
             self.query_string = ''
-            self.query = dict
+            self.query = dict()
 
     def __repr__(self):
         if self.method is None or self.url is None:
@@ -482,7 +496,7 @@ class Server:
                     break
 
                 try:
-                    await self._respond(writer, await self.on_request(request))
+                    await self._respond(writer, response)
                     logger.debug('Response sent to "%s": %s', s_addr(peername), response)
                 except (TimeoutError, asyncio.TimeoutError, EOFError, IOError, asyncio.CancelledError):
                     raise
@@ -638,6 +652,7 @@ async def fetch(url, resolver, pool, proxy=None, **kwargs):
 
 
 class JSONError(enum.Enum):
+    USER_DEFINED = 0, 'User defined error'
     INVALID_JSON = 1, 'Invalid JSON entity'
     ILLEGAL_PARAM = 2, 'Illegal user parameters'
 
@@ -678,3 +693,12 @@ def async_json_handler(func):
         except TypeError:
             return JsonResponse(JSONError.INVALID_JSON, HTTPStatus.BAD_REQUEST)
     return _handle
+
+
+def response_json_error(message, code=JSONError.USER_DEFINED.code):
+    return JsonResponse({
+        'error': {
+            'code': code,
+            'message': message,
+        }
+    })
