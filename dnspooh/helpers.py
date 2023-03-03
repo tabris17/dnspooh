@@ -56,7 +56,7 @@ class RandomInt:
         return random.randrange(self.begin, self.end)
     
     def to_json(self):
-        return 'random'
+        return 'random integer between %d to %d' % (self.begin, self.end)
 
 
 class Scheme(enum.Enum):
