@@ -19,7 +19,7 @@ class UpstreamCollection:
                 upstreams))
         if not enable_ipv6:
             upstreams = list(filter(
-                lambda _: _.host and not isinstance(ip_address(_.host), IPv6Address),
+                lambda _: not _.host or not isinstance(ip_address(_.host), IPv6Address),
                 upstreams))
         if not upstreams:
             raise ValueError('No upstream server available')
