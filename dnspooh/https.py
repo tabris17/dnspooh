@@ -450,10 +450,10 @@ class Server:
         return req
 
     def _attempt_static_file(self, path):
-        if not self.static_files:
+        if not self.root:
             return False
 
-        file_path = self.static_files.joinpath('.' + path)
+        file_path = self.root.joinpath('.' + path)
         if file_path.is_dir():
             for default_file in self.DEFAULT_FILES:
                 file_path = file_path.joinpath(default_file)
@@ -513,14 +513,14 @@ class Server:
         http_config = self.config['http']
         if http_config.get('disable'):
             return
-        static_files = http_config.get('static_files')
-        if static_files:
-            static_files_path = pathlib.Path(http_config['static_files'])
-            if not static_files_path.is_dir():
-                raise InvalidConfig('%s is not a directory' % static_files_path)
-            self.static_files = static_files_path
+        http_root = http_config.get('root')
+        if http_root:
+            root_path = pathlib.Path(http_root)
+            if not root_path.is_dir():
+                raise InvalidConfig('%s is not a directory' % root_path)
+            self.root = root_path
         else:
-            self.static_files = None
+            self.root = None
         host = http_config['host']
         port = int(http_config['port'])
         if host != '127.0.0.1' and host != 'localhost':

@@ -26,7 +26,7 @@
             case 'block': return ['string[]', '黑名单文件列表']
             case 'hosts': return ['string[]', 'hosts 文件列表']
             case 'rules': return ['object[]', '规则列表']
-            case 'http.static_files': return ['string', 'HTTP 服务静态文件路径']
+            case 'http.root': return ['string', 'HTTP 服务静态文件根路径']
             case 'http.host': return ['string', 'HTTP 服务绑定本机地址']
             case 'http.port': return ['int', 'HTTP 服务绑定本机端口']
             case 'http.timeout': return ['int', 'HTTP 服务访问超时时间（单位：毫秒）']
