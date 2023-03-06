@@ -26,7 +26,15 @@
             case 'STOP_PEDDING': return '正在停止'
             case 'STOPPED': return '已停止'
         }
-        return ''
+        return '未知'
+    }
+
+    let queryResolve: Promise<any>
+
+    function resolveDomain(this: HTMLElement) {
+        let input = this.parentNode.parentNode.querySelector('input[name="domain"]')
+        let domain = (input as HTMLInputElement).value
+        queryResolve = post('/dns-query', {domain: domain})
     }
 
     setInterval(() => reload(), 5000)
@@ -42,6 +50,53 @@
         {/await}
     </div>
 </PageTitle>
+
+<!-- svelte-ignore a11y-label-has-associated-control -->
+<div class="columns">
+    <div class="column">
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">域名解析</p>
+            </header>
+            <div class="card-content">
+                <div class="content">
+                    <div class="field has-addons">
+                        <p class="control is-expanded">
+                            <input class="input" name="domain" type="text" placeholder="请输入域名">
+                        </p>
+                        <p class="control">
+                            <button class="button is-info" on:click={resolveDomain}>解析</button>
+                        </p>
+                    </div>
+                    {#await queryResolve then payload}
+                    {#if payload}
+                    <textarea readonly class="input">{payload.result}</textarea>
+                    {/if}
+                    {/await}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="column">
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">地理位置解析</p>
+            </header>
+            <div class="card-content">
+                <div class="content">
+                    <div class="field has-addons">
+                        <p class="control is-expanded">
+                            <input class="input" type="text" placeholder="请输入 IP 地址">
+                        </p>
+                        <p class="control">
+                            <button class="button is-info">解析</button>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <style>
 

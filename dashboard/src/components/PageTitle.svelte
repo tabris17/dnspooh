@@ -17,3 +17,9 @@
         </div>
     </div>
 </div>
+
+<style>
+    .level {
+        min-height: 2.5em;
+    }
+</style>

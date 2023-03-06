@@ -406,7 +406,6 @@ class Server:
 
         self.restart_event.set()
 
-
     def on_error_reset(self, transport):
         self.transports.remove(transport)
         sockname = transport.get_extra_info('sockname')
@@ -510,6 +509,8 @@ class Server:
                 })
             case https.HTTPMethod.GET, '/logs':
                 return self._handle_query_access_log(request)
+            case https.HTTPMethod.POST, '/dns-query':
+                return await self._handle_dns_query(request)
         raise HttpNotFound()
     
     def _handle_query_access_log(self, request):
@@ -544,6 +545,13 @@ class Server:
                                       https.HTTPStatus.BAD_REQUEST) 
         return https.JsonResponse({
             'result': await self.test_upstream(self.upstreams[name], TEST_DOMAIN),
+        })
+
+    @https.async_json_handler
+    async def _handle_dns_query(self, domain):
+        request = DNSRecord.question(domain)
+        return https.JsonResponse({
+            'result': str(await self.handle(request)) 
         })
 
     async def _handle_test_all_upstream(self):
