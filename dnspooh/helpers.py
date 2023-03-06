@@ -69,4 +69,8 @@ class JsonEncoder(json.JSONEncoder):
     def default(self, o):
         if hasattr(o, 'to_json'):
             return o.to_json()
+        
+        if hasattr(o, '__iter__'):
+            return list(o)
+
         return super().default(o)

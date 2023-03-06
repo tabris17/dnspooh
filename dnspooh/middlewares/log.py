@@ -1,6 +1,7 @@
 import logging
 import sqlite3
 import time
+import json
 
 import dnslib
 
@@ -90,7 +91,7 @@ class LogMiddleware(Middleware):
             'qname': str(request.q.qname),
             'qtype': dnslib.QTYPE[request.q.qtype],
             'request': request.pack() if self.payload else None,
-            'traceback': traceback,
+            'traceback': json.dumps(traceback),
         }
 
         start_counter = time.perf_counter()

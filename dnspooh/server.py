@@ -5,6 +5,7 @@ import struct
 import functools
 import enum
 import time
+import math
 
 from importlib import resources
 
@@ -504,8 +505,15 @@ class Server:
             return https.response_json_error('没有启用访问日志中间件')
 
         page = request.get_int('page', 1)
+        total = log_middleware.query_total()
+        page_size = middlewares.log.QUERY_PAGE_SIZE
         return https.JsonResponse({
-            'total': log_middleware.query_total(),
+            'total': total,
+            'page': {
+                'current': page,
+                'size': page_size,
+                'count': math.ceil(total / page_size),
+            },
             'logs': log_middleware.query_dataset(page),
         })
 
