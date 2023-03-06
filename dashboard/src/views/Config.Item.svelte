@@ -34,7 +34,6 @@
             case 'middlewares': return ['string[]', '启用的中间件名称列表']
             case 'timeout': return ['int', '上游 DNS 服务器响应超时时间（单位：毫秒）']
             case 'upstreams': return ['object[]', '上游 DNS 服务器列表']
-            case 'stats.max_size': return ['int', '最大统计记录条目数']
             case 'cache.max_size': return ['int', '最大缓存条目数']
             case 'cache.ttl': return ['int', '缓存有效期（单位：秒）']
             case 'log.path': return ['string', '访问日志数据库文件路径']

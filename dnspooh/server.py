@@ -19,7 +19,6 @@ from . import version
 from .config import DnsUpstream, HttpsUpstream, TlsUpstream
 from .pool import Pool
 from .exceptions import *
-from .stats import Stats
 from .upstream import UpstreamCollection
 from .proxy import parse_proxy
 from .helpers import s_addr, Scheme
@@ -91,7 +90,6 @@ class Server:
         self.loop = asyncio.get_running_loop() if loop is None else loop
         self.abort_event = asyncio.Event()
         self.middlewares = self._create_middlewares()
-        self.stats = Stats(config['stats.max_size'])
         self.status = self.Status.INITIALIZED
         self.tasks = []
         self.transports = []
@@ -342,21 +340,20 @@ class Server:
                 kwargs['traceback'].append(upstream.name)
 
             try:
-                with self.stats.record(upstream):
-                    response_data = await asyncio.wait_for(
-                        asyncio.shield(resolver(data, upstream, proxy)), 
-                        self._get_timeout(upstream)
-                    )
-                    if response_data is None:
-                        raise EmptyValueError('Empty response data received')
-                    try:
-                        response = DNSRecord.parse(response_data)
-                    except DNSError:
-                        raise UnexpectedValueError('Invalid response data received')
-                    if request.header.id != response.header.id:
-                        raise UnexpectedValueError('Response id does not match')
-                    logger.debug('DNS response:\n%s', response)
-                    return response
+                response_data = await asyncio.wait_for(
+                    asyncio.shield(resolver(data, upstream, proxy)), 
+                    self._get_timeout(upstream)
+                )
+                if response_data is None:
+                    raise EmptyValueError('Empty response data received')
+                try:
+                    response = DNSRecord.parse(response_data)
+                except DNSError:
+                    raise UnexpectedValueError('Invalid response data received')
+                if request.header.id != response.header.id:
+                    raise UnexpectedValueError('Response id does not match')
+                logger.debug('DNS response:\n%s', response)
+                return response
             except ValueError:
                 logger.warning('Failed to resolve by upstream server %s', upstream.name)
             except (TimeoutError, asyncio.exceptions.TimeoutError):

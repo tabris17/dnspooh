@@ -40,7 +40,6 @@
           <th>类型</th>
           <th>成功</th>
           <th>跟踪</th>
-          <th>错误</th>
         </tr>
     </thead>
     <tbody>

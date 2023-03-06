@@ -29,8 +29,6 @@ CACHE_MAX_SIZE = 4096
 
 CACHE_TTL = 86400
 
-STATS_MAX_LEN = 1000
-
 BUILTIN_UPSTREAMS = [
     {
         'name': 'cloudflare-1',
@@ -463,9 +461,6 @@ DEFAULT_CONFIG = {
     'upstreams': BUILTIN_UPSTREAMS,
     'proxy': None,
     'geoip': None,
-    'stats': {
-        'max_size': STATS_MAX_LEN,
-    },
     'cache': {
         'max_size': CACHE_MAX_SIZE,
         'ttl': CACHE_TTL,
