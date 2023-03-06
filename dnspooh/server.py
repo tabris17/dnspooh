@@ -340,6 +340,7 @@ class Server:
                 kwargs['traceback'].append(upstream.name)
 
             try:
+                upstream.usage += 1
                 response_data = await asyncio.wait_for(
                     asyncio.shield(resolver(data, upstream, proxy)), 
                     self._get_timeout(upstream)
@@ -352,6 +353,7 @@ class Server:
                     raise UnexpectedValueError('Invalid response data received')
                 if request.header.id != response.header.id:
                     raise UnexpectedValueError('Response id does not match')
+                upstream.success += 1
                 logger.debug('DNS response:\n%s', response)
                 return response
             except ValueError:
