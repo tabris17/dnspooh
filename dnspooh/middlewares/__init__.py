@@ -2,6 +2,7 @@ import io
 import sys
 import asyncio
 import pathlib
+import json
 
 
 __all__ = ('Middleware', 'CacheMiddleware', 'HostsMiddleware', 'BlockMiddleware', 'RulesMiddleware', 'LogMiddleware')
@@ -40,7 +41,8 @@ async def load_config(filename, server, parser):
 
 
 class Traceback(list):
-    pass
+    def __repr__(self):
+        return json.dumps(self)
 
 
 class Middleware:
