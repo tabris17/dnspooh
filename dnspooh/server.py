@@ -88,8 +88,7 @@ class Server:
         self.config = config
         self.pool = Pool()
         self.loop = asyncio.get_running_loop() if loop is None else loop
-        self.abort_event = asyncio.Event()
-        self.middlewares = self._create_middlewares()
+        self.restart_event = asyncio.Event()
         self.status = self.Status.INITIALIZED
         self.tasks = []
         self.transports = []
@@ -397,17 +396,16 @@ class Server:
         task = self.loop.create_task(self._handle(request))
         task.add_done_callback(functools.partial(self.on_response, transport, request, addr))
 
-    def abort(self):
-        self.status = self.Status.STOP_PEDDING
-        logger.info('DNS serivce aborted')
-        return self.abort_event.set()
-
-    async def restart(self, silent=False):
+    def restart(self):
         self.status = self.Status.RESTART_PEDDING
-        if not silent: logger.info('Restarting service')
-        # TODO:
-        self.status = self.Status.RUNNING
-        if not silent: logger.info('DNS service restarted')
+        logger.info('Restarting service')
+        
+        from .cli import parse_arguments
+        from .config import Config
+        self.config = Config.load(parse_arguments())
+
+        self.restart_event.set()
+
 
     def on_error_reset(self, transport):
         self.transports.remove(transport)
@@ -421,12 +419,19 @@ class Server:
         return self.loop.create_task(reset(sockname))
 
     async def run(self):
+        self.status = self.Status.START_PEDDING
+        await self._run()
+        while self.status == self.Status.RESTART_PEDDING:
+            self.restart_event.clear()
+            await self._run()
+
+    async def _run(self):
+        self.middlewares = self._create_middlewares()
         try:
-            self.status = self.Status.START_PEDDING
             if not await self.middlewares.bootstrap():
                 logger.error('Failed to bootstrap')
                 return
-            
+
             for local_addr in self.local_addrs:
                 try:
                     transport, _ = await self.loop.create_datagram_endpoint(
@@ -443,12 +448,13 @@ class Server:
             logger.info('DNS serivce started')
 
             try:
-                await self.abort_event.wait()
+                await self.restart_event.wait()
             except asyncio.CancelledError:
                 logger.debug('DNS serivce interrupted')
             finally:
-                self.status = self.Status.STOPPED
-                logger.info('DNS serivce stopped')
+                if self.status == self.Status.RUNNING:
+                    self.status = self.Status.STOPPED
+                    logger.info('DNS serivce stopped')
         finally:
             for transport in self.transports:
                 transport.close()
@@ -471,6 +477,14 @@ class Server:
         match request.method, request.path:
             case https.HTTPMethod.GET, '/':
                 return https.Response(body='Dnspooh is working')
+            case https.HTTPMethod.GET, '/status':
+                return https.JsonResponse({
+                    'status': self.status.name,
+                })
+            case https.HTTPMethod.POST, '/restart':
+                return https.JsonResponse({
+                    'result': self.restart(),
+                })
             case https.HTTPMethod.GET, '/version':
                 return https.JsonResponse({
                     'version': version.__version__

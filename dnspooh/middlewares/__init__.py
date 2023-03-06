@@ -68,12 +68,6 @@ class Middleware:
         self.next = next
         self.name = name
 
-    def abort(self):
-        return self.next.abort()
-
-    def abort(self):
-        return self.next.abort()
-
     async def handle(self, request, **kwargs):
         if 'traceback' in kwargs:
             name = self.next.name if isinstance(self.next, __class__) \
@@ -84,8 +78,8 @@ class Middleware:
     async def bootstrap(self):
         return await self.next.bootstrap()
 
-    async def restart(self):
-        return await self.next.restart()
+    def restart(self):
+        return self.next.restart()
 
     async def reload(self):
         return await self.next.reload()
