@@ -516,7 +516,7 @@ class Server:
     def _handle_query_access_log(self, request):
         log_middleware = self.middlewares.get_component('log')
         if not isinstance(log_middleware, middlewares.LogMiddleware):
-            return https.response_json_error('没有启用访问日志中间件')
+            return https.response_json_error('The log middleware is not enabled')
 
         page = request.get_int('page', 1)
         total = log_middleware.query_total()
