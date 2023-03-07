@@ -10,8 +10,7 @@ import math
 from importlib import resources
 
 import maxminddb
-
-from dnslib import DNSRecord, DNSError, DNSHeader
+import dnslib
 
 from . import https
 from . import middlewares
@@ -126,7 +125,7 @@ class Server:
                 named_upstreams[upstream.name] = upstream
 
         async def resolve_upstream_hostname(hostname_upstream, bootstrap_upstreams):
-            request = DNSRecord.question(hostname_upstream.hostname)
+            request = dnslib.DNSRecord.question(hostname_upstream.hostname)
             response = await self.handle(request, upstreams=bootstrap_upstreams)
             if not response or response.header.a == 0:
                 logger.warning('Failed to resolve upstream domain "%s"', hostname_upstream.hostname)
@@ -143,7 +142,7 @@ class Server:
         return True
 
     async def test_upstream(self, upstream, hostname):
-        request = DNSRecord.question(hostname)
+        request = dnslib.DNSRecord.question(hostname)
         start_counter = time.perf_counter()
         response = await self.handle(request, upstreams=[upstream])
         elapsed_time_sec = time.perf_counter() - start_counter
@@ -347,8 +346,8 @@ class Server:
                 if response_data is None:
                     raise EmptyValueError('Empty response data received')
                 try:
-                    response = DNSRecord.parse(response_data)
-                except DNSError:
+                    response = dnslib.DNSRecord.parse(response_data)
+                except dnslib.DNSError:
                     raise UnexpectedValueError('Invalid response data received')
                 if request.header.id != response.header.id:
                     raise UnexpectedValueError('Response id does not match')
@@ -368,7 +367,7 @@ class Server:
                 _req = request.truncate()
                 _req.add_question(q)
                 coroutines.append(resolver.handle(_req))
-            response = DNSRecord(DNSHeader(id=request.header.id,
+            response = dnslib.DNSRecord(dnslib.DNSHeader(id=request.header.id,
                                            bitmap=request.header.bitmap,
                                            qr=1, ra=1, aa=1),
                                 questions=request.questions)
@@ -391,7 +390,7 @@ class Server:
             logger.debug('Failed to send data to %s', s_addr(addr))
 
     def on_request(self, transport, data, addr):
-        request = DNSRecord.parse(data)
+        request = dnslib.DNSRecord.parse(data)
         logger.debug('Received request from %s\n%s', s_addr(addr), request)
         task = self.loop.create_task(self._handle(request))
         task.add_done_callback(functools.partial(self.on_response, transport, request, addr))
@@ -551,7 +550,7 @@ class Server:
 
     @https.async_json_handler
     async def _handle_dns_query(self, domain):
-        request = DNSRecord.question(domain)
+        request = dnslib.DNSRecord.question(domain)
         response = await self.handle(request)
         if response is None:
             return https.response_json_error('Failed to resolve domain name %s' % domain)
