@@ -18,9 +18,8 @@ from http import HTTPStatus
 from http.client import HTTPMessage
 from urllib.parse import urlencode, urlsplit, parse_qs, quote
 
-from .scheme import Scheme
-from .exceptions import HttpException, HttpHeaderTooLarge, HttpPayloadTooLarge, HttpNotFound, InvalidConfig
-from .helpers import s_addr
+from .exceptions import HttpException, HttpHeaderTooLarge, HttpPayloadTooLarge, InvalidConfig
+from .helpers import s_addr, Scheme, JsonEncoder
 
 
 HTTP_VERSION = 'HTTP/1.1'
@@ -66,6 +65,9 @@ class HttpMessage(HTTPMessage):
             del self[name]
         return self.add_header(name, str(value), **params)
 
+    def is_closing(self):
+        return self.get('Connection', '').lower() == 'close'
+
 
 class FormData:
     def __init__(self):
@@ -105,9 +107,23 @@ class FormData:
 class Request:
     def get(self, name, default=None):
         if self.query and name in self.query:
-            return self.query[name].pop()
+            return self.query[name][0]
         if self.form and name in self.form:
-            return self.form[name].pop()
+            return self.form[name][0]
+        return default
+    
+    def get_int(self, name, default=0):
+        try:
+            return int(self.get(name))
+        except TypeError:
+            return default
+
+    def get_list(self, name, default=[]):
+        value = self.get(name)
+        if isinstance(value, list):
+            return value
+        elif value is not None:
+            return [value]
         return default
 
     def get_all(self, name):
@@ -116,6 +132,17 @@ class Request:
         if self.form and name in self.form:
             return self.form[name]
         return []
+    
+    def is_json(self):
+        return self._is_json
+
+    def json(self):
+        if not self.is_json():
+            return
+        try:
+            return json.loads(self._body)
+        except json.JSONDecodeError:
+            pass
 
     @property
     def body(self):
@@ -156,7 +183,7 @@ class Request:
         if not isinstance(value, bytes):
             raise TypeError('Response body must be bytes type, %s given' % (type(value), ))
 
-        raw_content_type = self.headers.get('Conetent-Type')
+        raw_content_type = self.headers.get('Content-Type')
         content_type = parse_content_type(raw_content_type)
         media_type = content_type.media_type
         charset = content_type.charset
@@ -166,6 +193,8 @@ class Request:
             self.form = parse_qs(decoded_body)
         elif media_type == 'multipart/form-data':
             self._parse_post_data(value)
+        elif media_type == 'application/json':
+            self._is_json = True
         self._body = value
 
     def __init__(self):
@@ -174,6 +203,7 @@ class Request:
         self.version = HTTP_VERSION
         self.headers = HttpMessage(email.policy.HTTP)
         self._body = None
+        self._is_json = False
         self.query_string = None
         self.path = None
         self.query = None
@@ -194,7 +224,7 @@ class Request:
             self.query = parse_qs(parsed_url.query)
         else:
             self.query_string = ''
-            self.query = dict
+            self.query = dict()
 
     def __repr__(self):
         if self.method is None or self.url is None:
@@ -207,12 +237,17 @@ class Request:
 
 
 class Response:
-    def __init__(self, status=200):
-        self._status = HTTPStatus(status)
+    def __init__(self, status=HTTPStatus.OK, body=None):
+        if not isinstance(status, HTTPStatus):
+            status = HTTPStatus(status)
+        if isinstance(body, str):
+            body = body.encode()
+        self._status = status
+        self.is_sent = False
         self.reason = self._status.name
         self.version = HTTP_VERSION
         self.headers = HttpMessage(email.policy.HTTP)
-        self.body = None
+        self.body = body
 
     @property
     def status(self):
@@ -235,8 +270,8 @@ class Response:
 
 
 class FileResponse(Response):
-    def __init__(self, file):
-        super().__init__()
+    def __init__(self, file, status=HTTPStatus.OK):
+        super().__init__(status)
         self.file = file
 
     @property
@@ -253,9 +288,9 @@ class FileResponse(Response):
 
 
 class JsonResponse(Response):
-    def __init__(self, payload):
-        super().__init__(200)
-        self.body = json.dumps(payload).encode()
+    def __init__(self, payload, status=HTTPStatus.OK):
+        super().__init__(status)
+        self.body = json.dumps(payload, cls=JsonEncoder).encode()
         self.headers.add_header('Content-Type', 'application/json', charset='utf-8')
 
     def __repr__(self):
@@ -345,17 +380,29 @@ class Server:
 
     DEFAULT_FILES = ['index.html', 'index.htm', 'default.htm', 'default.html']
 
-    def __init__(self, config, dispatcher, loop=None):
+    def __init__(self, config, handler=None, loop=None):
         self.loop = asyncio.get_running_loop() if loop is None else loop
         self.config = config
-        self.dispatcher = dispatcher
+        self._request_handler = self._create_request_handler(handler)
         self._server = None
         logger.debug('HTTP serivce initialized')
+    
+    def _create_request_handler(self, handler):
+        if hasattr(handler, 'handle'):
+            async def _handler(req):
+                return await handler.handle(req)
+        elif callable(handler):
+            async def _handler(req):
+                return await handler(req)
+        else:
+            async def _handler(req):
+                return await self.on_error(404)
+        return _handler
 
     async def _respond(self, writer, response):
         try:
             response.headers.add_header('Server', __package__)
-            start_line = '%s %s %s\r\n' % (response.version, response.status, response.status.name)
+            start_line = '%s %d %s\r\n' % (response.version, response.status.value, response.status.phrase)
             writer.write(start_line.encode())
             if isinstance(response, FileResponse):
                 ctype, charset = mimetypes.guess_type(response.file)
@@ -370,6 +417,7 @@ class Server:
                     writer.write(response.headers.as_bytes())
                     await writer.drain()
                     await self.loop.sendfile(writer.transport, fp)
+                response.is_sent = True
                 return response
             elif response.body:
                 response.headers.set_header('Content-Length', len(response.body))
@@ -379,8 +427,14 @@ class Server:
                 del response.headers['Content-Length']
                 writer.write(response.headers.as_bytes())
             await writer.drain()
+            response.is_sent = True
+        except asyncio.CancelledError:
+            raise
         except:
             raise IOError('Response begin sending and an error occurred')
+        finally:
+            if response.headers.is_closing():
+                writer.transport.abort()
         return response
         
     async def _read_request(self, reader):
@@ -389,15 +443,17 @@ class Server:
             start_line, req.headers, req.body = await _read_http_message(reader, self.MAX_REQUEST_SIZE)
             method, req.url, req.version = start_line.split(' ', 2)
             req.method = HTTPMethod(method)
-        except HttpException as exc:
-            raise exc
+        except (HttpException, asyncio.CancelledError):
+            raise
         except:
             raise HttpException('Invalid request')
         return req
 
-    def _resolve_static_file(self, path):
-        file_path = self.static_files.joinpath('.' + path)
+    def _attempt_static_file(self, path):
+        if not self.root:
+            return False
 
+        file_path = self.root.joinpath('.' + path)
         if file_path.is_dir():
             for default_file in self.DEFAULT_FILES:
                 file_path = file_path.joinpath(default_file)
@@ -409,46 +465,62 @@ class Server:
         return False
 
     async def on_request(self, request):
-        static_file = self._resolve_static_file(request.path)
+        static_file = self._attempt_static_file(request.path)
         if static_file:
             return FileResponse(static_file)
-        return self.dispatcher.dispatch(request)
+        return await (self._request_handler)(request)
 
-    async def on_error(self, status):
+    async def on_error(self, status, body=None):
         resp = Response(status)
         resp.headers.add_header('Connection', 'close')
+        resp.body = body
         return resp
 
     async def on_connect(self, reader, writer):
         peername = writer.transport.get_extra_info('peername')
         logger.debug('Connection from %s', s_addr(peername))
-        while not writer.transport.is_closing():
-            try:
-                request = await asyncio.wait_for(self._read_request(reader), self.timeout_sec)
-                logger.debug('Request received from "%s": %s', s_addr(peername), request)
-                response = await self._respond(writer, await self.on_request(request))
-                logger.debug('Response sent to "%s": %s', s_addr(peername), response)
-            except HttpException:
-                await self._respond(writer, await self.on_error(400))
-                writer.transport.close()
-                break
-            except (TimeoutError, asyncio.exceptions.TimeoutError, EOFError, IOError):
-                writer.transport.close()
-                break
-            except Exception as exc:
-                await self._respond(writer, await self.on_error(500))
-                writer.transport.close()
-                logger.warning('Server error: %s', exc)
-                break
+        try:
+            while not writer.transport.is_closing():
+                try:
+                    request = await asyncio.wait_for(self._read_request(reader), self.timeout_sec)
+                    logger.debug('Request received from "%s": %s', s_addr(peername), request)
+                    response = await self.on_request(request)
+                except HttpException as exc:
+                    await self._respond(writer, await self.on_error(exc.CODE))
+                    break
+                except (TimeoutError, asyncio.TimeoutError, EOFError, IOError, asyncio.CancelledError):
+                    raise
+                except Exception as exc:
+                    await self._respond(writer, await self.on_error(HTTPStatus.INTERNAL_SERVER_ERROR))
+                    logger.info('Server error on request: %s', exc)
+                    break
+
+                try:
+                    await self._respond(writer, response)
+                    logger.debug('Response sent to "%s": %s', s_addr(peername), response)
+                except (TimeoutError, asyncio.TimeoutError, EOFError, IOError, asyncio.CancelledError):
+                    raise
+                except Exception as exc:
+                    logger.info('Server error on response: %s', exc)
+                    writer.transport.abort()
+                    break
+        except (TimeoutError, asyncio.TimeoutError, EOFError, IOError):
+            writer.transport.abort()
+        except asyncio.CancelledError:
+            logger.debug('Connection from %s has been cancelled', s_addr(peername))
 
     async def run(self):
         http_config = self.config['http']
         if http_config.get('disable'):
             return
-        static_files = pathlib.Path(http_config['static_files'])
-        if not static_files.is_dir():
-            raise InvalidConfig('%s is not a directory' % (static_files, ))
-        self.static_files = static_files
+        http_root = http_config.get('root')
+        if http_root:
+            root_path = pathlib.Path(http_root)
+            if not root_path.is_dir():
+                raise InvalidConfig('%s is not a directory' % root_path)
+            self.root = root_path
+        else:
+            self.root = None
         host = http_config['host']
         port = int(http_config['port'])
         if host != '127.0.0.1' and host != 'localhost':
@@ -465,7 +537,6 @@ class Server:
             logger.debug('HTTP serivce interrupted')
         finally:
             self._server.close()
-            #self.status = self.Status.stopped
             logger.info('HTTP serivce stopped')
 
 
@@ -541,40 +612,14 @@ def parse_uploaded_file(message, content_disposition=None):
     return UploadedFile(filename, name, content_type, content)
 
 
-class Dispatcher:
-    def __init__(self, dns_server):
-        super().__init__()
-        self.dns_server = dns_server
-
-    def _status(self):
-        return JsonResponse({
-            'status': self.dns_server.status.name,
-            'upstreams': [vars(up) for up in self.dns_server.upstreams],
-            'stats': [record.as_dict() for record in self.dns_server.stats.records],
-        })
-
-    def _stop(self, request):
-        pass
-
-    def _restart(self, request):
-        pass
-
-    def dispatch(self, request):
-        match request.method, request.path:
-            case HTTPMethod.GET, '/status': return self._status()
-            case HTTPMethod.POST, '/stop': return self._stop(request)
-            case HTTPMethod.POST, '/restart': return self._start(request)
-        raise HttpNotFound()
-
-
 async def fetch(url, resolver, pool, proxy=None, **kwargs):
     parsed_url = urlsplit(url)
     hostname = parsed_url.hostname
     if parsed_url.scheme == 'http':
-        scheme = Scheme.tcp
+        scheme = Scheme.TCP
         port = parsed_url.port if parsed_url.port else DEFAULT_HTTP_PORT
     elif parsed_url.scheme == 'https':
-        scheme = Scheme.tls
+        scheme = Scheme.TLS
         port = parsed_url.port if parsed_url.port else DEFAULT_HTTPS_PORT
     else:
         raise ValueError('Invalid url scheme %s' % (parsed_url.scheme, ))
@@ -604,3 +649,56 @@ async def fetch(url, resolver, pool, proxy=None, **kwargs):
         else:
             body = kwargs.get('body')
             return await Client(hostname, conn).post(url_path, headers=headers, body=body)
+
+
+class JSONError(enum.Enum):
+    USER_DEFINED = 0, 'User defined error'
+    INVALID_JSON = 1, 'Invalid JSON entity'
+    ILLEGAL_PARAM = 2, 'Illegal user parameters'
+
+    def __new__(cls, code, message):
+        obj = object.__new__(cls)
+        obj.code = code
+        obj.message = message
+        return obj
+    
+    def to_json(self):
+        return {
+            'error': {
+                'code': self.code,
+                'message': self.message,
+            }
+        }
+
+
+def json_handler(func):
+    def _handle(self, request):
+        if not request.is_json():
+            raise HttpException()
+
+        try:
+            return func(self, **request.json())
+        except TypeError:
+            return JsonResponse(JSONError.INVALID_JSON, HTTPStatus.BAD_REQUEST)
+    return _handle
+
+
+def async_json_handler(func):
+    async def _handle(self, request):
+        if not request.is_json():
+            raise HttpException()
+
+        try:
+            return await func(self, **request.json())
+        except TypeError:
+            return JsonResponse(JSONError.INVALID_JSON, HTTPStatus.BAD_REQUEST)
+    return _handle
+
+
+def response_json_error(message, code=JSONError.USER_DEFINED.code):
+    return JsonResponse({
+        'error': {
+            'code': code,
+            'message': str(message),
+        }
+    })

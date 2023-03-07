@@ -2,6 +2,7 @@ import io
 import sys
 import asyncio
 import pathlib
+import json
 
 
 __all__ = ('Middleware', 'CacheMiddleware', 'HostsMiddleware', 'BlockMiddleware', 'RulesMiddleware', 'LogMiddleware')
@@ -40,7 +41,8 @@ async def load_config(filename, server, parser):
 
 
 class Traceback(list):
-    pass
+    def __repr__(self):
+        return json.dumps(self)
 
 
 class Middleware:
@@ -59,18 +61,12 @@ class Middleware:
         if self.name == name:
             return self
         if not hasattr(self.next, self.get_component.__name__):
-            raise ValueError('Middleware %s not found' % (name, ))
+            return
         return self.next.get_component(name)
 
     def initialize(self, next, name):
         self.next = next
         self.name = name
-
-    def abort(self):
-        return self.next.abort()
-
-    def abort(self):
-        return self.next.abort()
 
     async def handle(self, request, **kwargs):
         if 'traceback' in kwargs:
@@ -82,8 +78,8 @@ class Middleware:
     async def bootstrap(self):
         return await self.next.bootstrap()
 
-    async def restart(self):
-        return await self.next.restart()
+    def restart(self):
+        return self.next.restart()
 
     async def reload(self):
         return await self.next.reload()
