@@ -511,6 +511,8 @@ class Server:
                 return self._handle_query_access_log(request)
             case https.HTTPMethod.POST, '/dns-query':
                 return await self._handle_dns_query(request)
+            case https.HTTPMethod.POST, '/geoip2-query':
+                return await self._handle_geoip2_query(request)
         raise HttpNotFound()
     
     def _handle_query_access_log(self, request):
@@ -550,8 +552,21 @@ class Server:
     @https.async_json_handler
     async def _handle_dns_query(self, domain):
         request = DNSRecord.question(domain)
+        response = await self.handle(request)
+        if response is None:
+            return https.response_json_error('Failed to resolve domain name %s' % domain)
         return https.JsonResponse({
-            'result': str(await self.handle(request)) 
+            'result': str(response)
+        })
+
+    @https.async_json_handler
+    async def _handle_geoip2_query(self, ip):
+        try:
+            result = self.open_geoip().get(ip)
+        except ValueError as exc:
+            return https.response_json_error(exc)
+        return https.JsonResponse({
+            'result': result
         })
 
     async def _handle_test_all_upstream(self):

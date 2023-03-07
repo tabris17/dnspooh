@@ -699,6 +699,6 @@ def response_json_error(message, code=JSONError.USER_DEFINED.code):
     return JsonResponse({
         'error': {
             'code': code,
-            'message': message,
+            'message': str(message),
         }
     })

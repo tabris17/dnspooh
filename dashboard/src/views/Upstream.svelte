@@ -1,8 +1,11 @@
 <script lang="ts">
     import PageTitle from '../components/PageTitle.svelte'
     import { get, post } from '../utils'
+    import Notification from '../components/Notification.svelte'
 
     let testAllPedding = false
+
+    let notification: Notification
 
     let query = get('/upstreams')
 
@@ -14,6 +17,7 @@
         testAllPedding = true
         await post('/upstreams/test-all')
         testAllPedding = false
+        notification.showMessage('全部节点测试完成')
         reload()
     }
 
@@ -28,23 +32,24 @@
 
     async function handleSelectPrimaryUpstream(this: HTMLElement) {
         const name = this.dataset.name
-        let result = await post('/upstreams/primary', {name: name})
-        if (result) {
-            return reload()
+        let payload = await post('/upstreams/primary', {name: name})
+        if (payload.error) {
+            return notification.showMessage(payload.error.message)
         }
-        alert('请求失败')
+        return reload()
     }
 
     async function handleTestUpstream(this: HTMLElement) {
         const name = this.dataset.name
-        let response = await post('/upstreams/test', {name: name})
-        if (response.error) {
-            alert(response.error.message)
-            return
+        let payload = await post('/upstreams/test', {name: name})
+        if (payload.error) {
+            return notification.showError(payload.error.message)
         }
-        alert(response.result ? '测试成功：该节点可以正常访问' : '测试失败：该节点无法正常访问')
+        notification.showMessage(payload.result ? `测试成功：节点 ${name} 可以正常访问` : `测试失败：节点 ${name} 无法正常访问`)
     }
 </script>
+
+<Notification bind:this={notification}/>
 
 <PageTitle text={'上游节点'}>
     <p class="subtitle" slot="left">
