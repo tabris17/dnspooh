@@ -40,8 +40,16 @@ INSERT_SUCCESS_SQL = \
     (:now, :elapsed_time, :qname, :qtype, :success, :request, :response, :traceback)
 '''
 
+SELECT_DATASET_SQL = \
+'''SELECT id, created_at, elapsed_time, qname, qtype, success, traceback, error 
+    FROM "log" ORDER BY id DESC LIMIT :offset, :page_size
+'''
+
+QUERY_PAGE_SIZE = 50
+
 
 class LogMiddleware(Middleware):
+
     def __init__(self, path, trace, payload):
         self.path = path
         self.trace = trace
@@ -55,6 +63,22 @@ class LogMiddleware(Middleware):
 
     def _open_db(self):
         return sqlite3.connect(self.path)
+
+    def query_dataset(self, page, page_size=QUERY_PAGE_SIZE):
+        offset = (page - 1) * page_size
+        with self._open_db() as db:
+            result = db.execute(SELECT_DATASET_SQL, {
+                'offset': offset,
+                'page_size': page_size
+            })
+            field_names = [column[0] for column in result.description]
+            return [dict(zip(field_names, row)) for row in result]
+
+    def query_total(self):
+        with self._open_db() as db:
+            result = db.execute('SELECT COUNT(*) FROM "log"')
+            total, = result.fetchone()
+            return total
 
     async def handle(self, request, **kwargs):
         if self.trace:

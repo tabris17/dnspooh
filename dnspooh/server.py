@@ -5,26 +5,28 @@ import struct
 import functools
 import enum
 import time
+import math
 
 from importlib import resources
 
 import maxminddb
-
-from dnslib import DNSRecord, DNSError, DNSHeader
+import dnslib
 
 from . import https
 from . import middlewares
+from . import version
 from .config import DnsUpstream, HttpsUpstream, TlsUpstream
 from .pool import Pool
-from .scheme import Scheme
 from .exceptions import *
-from .stats import Stats
 from .upstream import UpstreamCollection
 from .proxy import parse_proxy
-from .helpers import s_addr
+from .helpers import s_addr, Scheme
 
 
 logger = logging.getLogger(__name__)
+
+
+TEST_DOMAIN = 'www.google.com'
 
 
 class ServerProtocol(asyncio.DatagramProtocol):
@@ -74,21 +76,19 @@ class QueryProtocol(asyncio.DatagramProtocol):
 
 class Server:
     class Status(enum.Enum):
-        initialized = enum.auto()
-        start_pedding = enum.auto()
-        running = enum.auto()
-        restart_pedding = enum.auto()
-        stop_pedding = enum.auto()
-        stopped = enum.auto()
+        INITIALIZED = enum.auto()
+        START_PEDDING = enum.auto()
+        RUNNING = enum.auto()
+        RESTART_PEDDING = enum.auto()
+        STOP_PEDDING = enum.auto()
+        STOPPED = enum.auto()
 
     def __init__(self, config, loop=None):
         self.config = config
         self.pool = Pool()
         self.loop = asyncio.get_running_loop() if loop is None else loop
-        self.abort_event = asyncio.Event()
-        self.middlewares = self._create_middlewares()
-        self.stats = Stats(config['stats.max_size'])
-        self.status = self.Status.initialized
+        self.restart_event = asyncio.Event()
+        self.status = self.Status.INITIALIZED
         self.tasks = []
         self.transports = []
         logger.debug('DNS serivce initialized')
@@ -125,7 +125,7 @@ class Server:
                 named_upstreams[upstream.name] = upstream
 
         async def resolve_upstream_hostname(hostname_upstream, bootstrap_upstreams):
-            request = DNSRecord.question(hostname_upstream.hostname)
+            request = dnslib.DNSRecord.question(hostname_upstream.hostname)
             response = await self.handle(request, upstreams=bootstrap_upstreams)
             if not response or response.header.a == 0:
                 logger.warning('Failed to resolve upstream domain "%s"', hostname_upstream.hostname)
@@ -138,25 +138,32 @@ class Server:
                 for hostname_upstream in hostname_upstreams
         ])
 
-        await self.test_upstreams('google.com')
+        await self.test_all_upstreams(TEST_DOMAIN)
         return True
 
-    async def test_upstreams(self, hostname):
-        request = DNSRecord.question(hostname)
-        async def test_upstream(upstream):
-            start_counter = time.perf_counter()
-            response = await self.handle(request, upstreams=[upstream])
-            elapsed_time_sec = time.perf_counter() - start_counter
-            if not response or response.header.a == 0:
-                upstream.disable = True
-                upstream.priority = -1
-                logger.warning('Test upstream %s failed', upstream.name)
-            else:
-                timeout_sec = self._get_timeout(upstream)
-                upstream.priority = int(max(0, timeout_sec - elapsed_time_sec) / timeout_sec * 1000)
-                logger.info('Test upstream %s passed, responding speed: %d', upstream.name, upstream.priority)
+    async def test_upstream(self, upstream, hostname):
+        request = dnslib.DNSRecord.question(hostname)
+        start_counter = time.perf_counter()
+        response = await self.handle(request, upstreams=[upstream])
+        elapsed_time_sec = time.perf_counter() - start_counter
+        if not response or response.header.a == 0:
+            upstream.disable = True
+            upstream.priority = -1
+            logger.warning('Test upstream %s failed', upstream.name)
+            return False
+        timeout_sec = self._get_timeout(upstream)
+        upstream.priority = int(max(0, timeout_sec - elapsed_time_sec) / timeout_sec * 1000)
+        upstream.disable = False
+        logger.info('Test upstream %s passed, responding speed: %d', upstream.name, upstream.priority)
+        return True
 
-        await asyncio.gather(*[test_upstream(_) for _ in self.upstreams.all() if not _.disable])
+    async def test_all_upstreams(self, hostname, include_disabled=False):
+        queries = [
+            self.test_upstream(upstream, hostname) 
+            for upstream in self.upstreams.all() 
+            if include_disabled or not upstream.disable
+        ]
+        await asyncio.gather(*queries)
         self.upstreams.sort()
         primary_upstream = self.upstreams.primary
         if primary_upstream.disable:
@@ -209,7 +216,7 @@ class Server:
                 conn = await self.pool.connect(
                     upstream.host, 
                     upstream.port, 
-                    Scheme.udp, 
+                    Scheme.UDP, 
                     proxy
                 )
             except ConnectionError as exc:
@@ -246,7 +253,7 @@ class Server:
             with await self.pool.connect(
                 upstream.host, 
                 upstream.port, 
-                Scheme.tls, 
+                Scheme.TLS, 
                 proxy
             ) as conn:
                 q = base64.b64encode(query).decode().rstrip('=')
@@ -265,7 +272,7 @@ class Server:
             with await self.pool.connect(
                 upstream.host, 
                 upstream.port, 
-                Scheme.tls, 
+                Scheme.TLS, 
                 proxy
             ) as conn:
                 query_size = struct.pack('!H', len(query))
@@ -288,28 +295,37 @@ class Server:
     def _get_timeout(self, upstream):
         return self.timeout_sec if upstream.timeout_sec is None else upstream.timeout_sec
 
-    def _get_upstreams(self, **kwargs):
+    def _get_upstreams(self, kwargs):
+        customized_upstreams = []
         if 'upstreams' in kwargs:
-            return kwargs['upstreams']
-        elif 'upstream_name' in kwargs:
+            customized_upstreams.extend(kwargs['upstreams'])
+        if 'upstream' in kwargs:
+            customized_upstreams.append(kwargs['upstream'])
+        if 'upstream_name' in kwargs:
             upstream_name = kwargs['upstream_name']
             if upstream_name in self.upstreams:
-                return list(self.upstreams[upstream_name])
-            logger.warning('Upstream name %s not defined', upstream_name)
-        elif 'upstream_group' in kwargs:
+                customized_upstreams.append(self.upstreams[upstream_name])
+            else:
+                logger.warning('Upstream name %s not defined', upstream_name)
+        if 'upstream_group' in kwargs:
             upstream_group = kwargs['upstream_group']
             if self.upstreams.has_group(upstream_group):
-                return self.upstreams.group(upstream_group)
-            logger.warning('Upstream group %s not defined', upstream_group)
-        return self.upstreams.sorted()
+                customized_upstreams.extend(self.upstreams.group(upstream_group))
+            else:
+                logger.warning('Upstream group %s not defined', upstream_group)
+        if customized_upstreams:
+            kwargs['customized_upstreams'] = True
+            return customized_upstreams
+        return self.upstreams.sorted
 
     async def handle(self, request, **kwargs):
         logger.debug('DNS query:\n%s', request)
         data = request.pack()
 
-        for upstream in self._get_upstreams(**kwargs):
+        for upstream in self._get_upstreams(kwargs):
             proxy = self._get_proxy(upstream, **kwargs)
-            if upstream.disable: continue
+            if upstream.disable and 'customized_upstreams' not in kwargs:
+                continue
             if isinstance(upstream, DnsUpstream):
                 resolver = self._resolve_by_dns
             elif isinstance(upstream, HttpsUpstream):
@@ -322,21 +338,22 @@ class Server:
                 kwargs['traceback'].append(upstream.name)
 
             try:
-                with self.stats.record(upstream):
-                    response_data = await asyncio.wait_for(
-                        asyncio.shield(resolver(data, upstream, proxy)), 
-                        self._get_timeout(upstream)
-                    )
-                    if response_data is None:
-                        raise EmptyValueError('Empty response data received')
-                    try:
-                        response = DNSRecord.parse(response_data)
-                    except DNSError:
-                        raise UnexpectedValueError('Invalid response data received')
-                    if request.header.id != response.header.id:
-                        raise UnexpectedValueError('Response id does not match')
-                    logger.debug('DNS response:\n%s', response)
-                    return response
+                upstream.usage += 1
+                response_data = await asyncio.wait_for(
+                    asyncio.shield(resolver(data, upstream, proxy)), 
+                    self._get_timeout(upstream)
+                )
+                if response_data is None:
+                    raise EmptyValueError('Empty response data received')
+                try:
+                    response = dnslib.DNSRecord.parse(response_data)
+                except dnslib.DNSError:
+                    raise UnexpectedValueError('Invalid response data received')
+                if request.header.id != response.header.id:
+                    raise UnexpectedValueError('Response id does not match')
+                upstream.success += 1
+                logger.debug('DNS response:\n%s', response)
+                return response
             except ValueError:
                 logger.warning('Failed to resolve by upstream server %s', upstream.name)
             except (TimeoutError, asyncio.exceptions.TimeoutError):
@@ -350,7 +367,7 @@ class Server:
                 _req = request.truncate()
                 _req.add_question(q)
                 coroutines.append(resolver.handle(_req))
-            response = DNSRecord(DNSHeader(id=request.header.id,
+            response = dnslib.DNSRecord(dnslib.DNSHeader(id=request.header.id,
                                            bitmap=request.header.bitmap,
                                            qr=1, ra=1, aa=1),
                                 questions=request.questions)
@@ -373,22 +390,20 @@ class Server:
             logger.debug('Failed to send data to %s', s_addr(addr))
 
     def on_request(self, transport, data, addr):
-        request = DNSRecord.parse(data)
+        request = dnslib.DNSRecord.parse(data)
         logger.debug('Received request from %s\n%s', s_addr(addr), request)
         task = self.loop.create_task(self._handle(request))
         task.add_done_callback(functools.partial(self.on_response, transport, request, addr))
 
-    def abort(self):
-        self.status = self.Status.stop_pedding
-        logger.info('DNS serivce aborted')
-        return self.abort_event.set()
+    def restart(self):
+        self.status = self.Status.RESTART_PEDDING
+        logger.info('Restarting service')
+        
+        from .cli import parse_arguments
+        from .config import Config
+        self.config = Config.load(parse_arguments())
 
-    async def restart(self, silent=False):
-        self.status = self.Status.restart_pedding
-        if not silent: logger.info('Restarting service')
-        # TODO:
-        self.status = self.Status.running
-        if not silent: logger.info('DNS service restarted')
+        self.restart_event.set()
 
     def on_error_reset(self, transport):
         self.transports.remove(transport)
@@ -402,12 +417,19 @@ class Server:
         return self.loop.create_task(reset(sockname))
 
     async def run(self):
+        self.status = self.Status.START_PEDDING
+        await self._run()
+        while self.status == self.Status.RESTART_PEDDING:
+            self.restart_event.clear()
+            await self._run()
+
+    async def _run(self):
+        self.middlewares = self._create_middlewares()
         try:
-            self.status = self.Status.start_pedding
             if not await self.middlewares.bootstrap():
                 logger.error('Failed to bootstrap')
                 return
-            
+
             for local_addr in self.local_addrs:
                 try:
                     transport, _ = await self.loop.create_datagram_endpoint(
@@ -420,16 +442,17 @@ class Server:
                     logger.error('Failed to start DNS service: %s', exc)
                     return
 
-            self.status = self.Status.running
+            self.status = self.Status.RUNNING
             logger.info('DNS serivce started')
 
             try:
-                await self.abort_event.wait()
+                await self.restart_event.wait()
             except asyncio.CancelledError:
                 logger.debug('DNS serivce interrupted')
             finally:
-                self.status = self.Status.stopped
-                logger.info('DNS serivce stopped')
+                if self.status == self.Status.RUNNING:
+                    self.status = self.Status.STOPPED
+                    logger.info('DNS serivce stopped')
         finally:
             for transport in self.transports:
                 transport.close()
@@ -447,3 +470,106 @@ class Server:
         result = self.open_geoip().get(ip)
         _country = result['country']['iso_code'] if result else None
         return country.upper() == _country
+
+    async def handle_http_request(self, request):
+        match request.method, request.path:
+            case https.HTTPMethod.GET, '/':
+                return https.Response(body='Dnspooh is working')
+            case https.HTTPMethod.GET, '/status':
+                return https.JsonResponse({
+                    'status': self.status.name,
+                })
+            case https.HTTPMethod.POST, '/restart':
+                return https.JsonResponse({
+                    'result': self.restart(),
+                })
+            case https.HTTPMethod.GET, '/version':
+                return https.JsonResponse({
+                    'version': version.__version__
+                })
+            case https.HTTPMethod.GET, '/upstreams':
+                return https.JsonResponse({
+                    'upstreams': self.upstreams,
+                    'primary': self.upstreams.primary,
+                })
+            case https.HTTPMethod.POST, '/upstreams/primary':
+                return self._handle_select_primary_upstream(request)
+            case https.HTTPMethod.POST, '/upstreams/test':
+                return await self._handle_test_upstream(request)
+            case https.HTTPMethod.POST, '/upstreams/test-all':
+                return await self._handle_test_all_upstream()
+            case https.HTTPMethod.GET, '/pool':
+                return https.JsonResponse({
+                    'pool': self.pool,
+                })
+            case https.HTTPMethod.GET, '/config':
+                return https.JsonResponse({
+                    'config': self.config,
+                })
+            case https.HTTPMethod.GET, '/logs':
+                return self._handle_query_access_log(request)
+            case https.HTTPMethod.POST, '/dns-query':
+                return await self._handle_dns_query(request)
+            case https.HTTPMethod.POST, '/geoip2-query':
+                return await self._handle_geoip2_query(request)
+        raise HttpNotFound()
+    
+    def _handle_query_access_log(self, request):
+        log_middleware = self.middlewares.get_component('log')
+        if not isinstance(log_middleware, middlewares.LogMiddleware):
+            return https.response_json_error('The log middleware is not enabled')
+
+        page = request.get_int('page', 1)
+        total = log_middleware.query_total()
+        page_size = middlewares.log.QUERY_PAGE_SIZE
+        return https.JsonResponse({
+            'total': total,
+            'page': {
+                'current': page,
+                'size': page_size,
+                'count': math.ceil(total / page_size),
+            },
+            'logs': log_middleware.query_dataset(page),
+        })
+
+    @https.json_handler
+    def _handle_select_primary_upstream(self, name):
+        self.upstreams.select(name)
+        return https.JsonResponse({
+            'result': True,
+        })
+
+    @https.async_json_handler
+    async def _handle_test_upstream(self, name):
+        if name not in self.upstreams:
+            return https.JsonResponse(https.JSONError.ILLEGAL_PARAM, 
+                                      https.HTTPStatus.BAD_REQUEST) 
+        return https.JsonResponse({
+            'result': await self.test_upstream(self.upstreams[name], TEST_DOMAIN),
+        })
+
+    @https.async_json_handler
+    async def _handle_dns_query(self, domain):
+        request = dnslib.DNSRecord.question(domain)
+        response = await self.handle(request)
+        if response is None:
+            return https.response_json_error('Failed to resolve domain name %s' % domain)
+        return https.JsonResponse({
+            'result': str(response)
+        })
+
+    @https.async_json_handler
+    async def _handle_geoip2_query(self, ip):
+        try:
+            result = self.open_geoip().get(ip)
+        except ValueError as exc:
+            return https.response_json_error(exc)
+        return https.JsonResponse({
+            'result': result
+        })
+
+    async def _handle_test_all_upstream(self):
+        await self.test_all_upstreams(TEST_DOMAIN, True)
+        return https.JsonResponse({
+            'result': True,
+        })

@@ -4,8 +4,7 @@ import ipaddress
 
 from urllib.parse import urlsplit
 
-from .scheme import Scheme
-from .helpers import s_addr
+from .helpers import s_addr, Scheme
 
 
 DEFAULT_HTTP_PROXY_PORT = 8080
@@ -23,6 +22,9 @@ class Proxy:
 
     def __repr__(self):
         return self.url
+    
+    def to_json(self):
+        return self.__repr__()
 
     def has_auth(self):
         return self.username is not None and \
@@ -117,7 +119,7 @@ class Socks5Proxy(Proxy):
     def udp_tunnel_enabled(self):
         return True
 
-    async def _handshake(self, reader, writer, remote_addr, scheme=Scheme.tcp):
+    async def _handshake(self, reader, writer, remote_addr, scheme=Scheme.TCP):
         writer.write(struct.pack('!3B', self.VERSION, 1, self.AUTH_METHOD))
         await writer.drain()
         server_version, method = struct.unpack('!2B', await reader.readexactly(2))
@@ -152,7 +154,7 @@ class Socks5Proxy(Proxy):
             writer.write(struct.pack(
                 '!4B4sH', 
                 self.VERSION, 
-                self.CMD_CONNECT if scheme == Scheme.tcp else self.CMD_UDP_ASSOCIATE,
+                self.CMD_CONNECT if scheme == Scheme.TCP else self.CMD_UDP_ASSOCIATE,
                 0, 
                 self.ATYP_IPV4,
                 ip_addr.packed,
@@ -162,7 +164,7 @@ class Socks5Proxy(Proxy):
             writer.write(struct.pack(
                 '!4B16sH', 
                 self.VERSION, 
-                self.CMD_CONNECT if scheme == Scheme.tcp else self.CMD_UDP_ASSOCIATE,
+                self.CMD_CONNECT if scheme == Scheme.TCP else self.CMD_UDP_ASSOCIATE,
                 0, 
                 self.ATYP_IPV6,
                 ip_addr.packed,
@@ -186,14 +188,14 @@ class Socks5Proxy(Proxy):
         else:
             raise ConnectionError('Invalid response atype')
 
-        if scheme != Scheme.udp and (bind_addr != self.host or bind_port != self.port):
+        if scheme != Scheme.UDP and (bind_addr != self.host or bind_port != self.port):
             raise ConnectionError('Relay mode does not supported')
 
         return bind_addr, bind_port
 
     async def handshake(self, reader, writer, remote_addr):
         try:
-            await self._handshake(reader, writer, remote_addr, Scheme.tcp)
+            await self._handshake(reader, writer, remote_addr, Scheme.TCP)
         except ConnectionError:
             return False
 
@@ -201,7 +203,7 @@ class Socks5Proxy(Proxy):
 
     async def make_udp_tunnel(self, reader, writer, remote_addr):
         return self.UDPTunnel(
-            await self._handshake(reader, writer, remote_addr, Scheme.udp)
+            await self._handshake(reader, writer, remote_addr, Scheme.UDP)
         )
 
 

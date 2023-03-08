@@ -10,7 +10,7 @@ except ImportError:
 from .upstream import *
 from .proxy import *
 from .exceptions import InvalidConfig
-from .helpers import parse_addr
+from .helpers import parse_addr, flat_dict, RandomInt
 
 
 CONFIG_FILE = 'config.yml'
@@ -25,13 +25,9 @@ HTTP_TIMEOUT = 10000
 
 HTTP_HOST = '127.0.0.1'
 
-HTTP_PORT = 8964
-
 CACHE_MAX_SIZE = 4096
 
 CACHE_TTL = 86400
-
-STATS_MAX_LEN = 1000
 
 BUILTIN_UPSTREAMS = [
     {
@@ -465,9 +461,6 @@ DEFAULT_CONFIG = {
     'upstreams': BUILTIN_UPSTREAMS,
     'proxy': None,
     'geoip': None,
-    'stats': {
-        'max_size': STATS_MAX_LEN,
-    },
     'cache': {
         'max_size': CACHE_MAX_SIZE,
         'ttl': CACHE_TTL,
@@ -479,10 +472,9 @@ DEFAULT_CONFIG = {
     },
     'http': {
         'host': HTTP_HOST,
-        'port': HTTP_PORT,
+        'port': RandomInt(1024, 65535),
         'timeout': HTTP_TIMEOUT,
-        'static_files': 'web',
-        'disable': True,
+        'disable': False,
     },
     'middlewares': ['cache'],
 }
@@ -647,3 +639,10 @@ class Config:
             raise InvalidConfig(exc)
 
         return cls(conf)
+
+    def to_json(self):
+        conf = [{
+            'name': k,
+            'value': v,
+        } for k, v in flat_dict(self.conf)]
+        return conf
