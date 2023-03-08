@@ -453,7 +453,10 @@ class Server:
         if not self.root:
             return False
 
-        file_path = self.root.joinpath('.' + path)
+        file_path = self.root.joinpath('.' + path).resolve()
+        if not str(file_path).startswith(str(self.root)):
+            return False
+
         if file_path.is_dir():
             for default_file in self.DEFAULT_FILES:
                 file_path = file_path.joinpath(default_file)
@@ -515,7 +518,7 @@ class Server:
             return
         http_root = http_config.get('root')
         if http_root:
-            root_path = pathlib.Path(http_root)
+            root_path = pathlib.Path(http_root).resolve()
             if not root_path.is_dir():
                 raise InvalidConfig('%s is not a directory' % root_path)
             self.root = root_path

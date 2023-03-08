@@ -53,7 +53,7 @@ python main.py --help
 通过命令行的 `--help` 参数可以查看 Dnspooh 支持的命令行参数：
 
 ```text
-usage: dnspooh [-c file] [-u dns_server [dns_server ...]] [-t ms] [-l addr [addr ...]] [-o file] [-S] [-6] [-D] [-d] [-v] [-h]
+usage: dnspooh [-c file] [-u dns_server [dns_server ...]] [-t ms] [-l addr [addr ...]] [-o log] [-S] [-6] [-D] [-d] [-v] [-h]
 
 A Lightweight DNS MitM Proxy
 
@@ -65,8 +65,7 @@ options:
   -t ms, --timeout ms   milliseconds for upstream DNS response timeout (default 5000 ms)
   -l addr [addr ...], --listen addr [addr ...]
                         binding to local address and port for DNS proxy server (default "0.0.0.0:53")
-  -o file, --output file
-                        write stdout to the specified file
+  -o log, --output log  write stdout to the specified file
   -S, --secure-only     use DoT/DoH upstream servers only
   -6, --enable-ipv6     enable IPv6 upstream servers
   -D, --debug           display debug message
@@ -81,9 +80,9 @@ options:
 | ------------------------------ | ------------------------------------ | ---------------------------------- |
 | -c file                        | 加载配置文件                         | dnspooh -c config.yml              |
 | -u dns_server [dns_server ...] | 上游服务器地址列表                   | dnspooh -u 114.114.114.114 1.1.1.1 |
-| -t ms                          | 设置上游服务器超时时间（单位：毫秒） |                                    |
+| -t ms                          | 设置上游服务器超时时间（单位：毫秒） | dnspooh -t 5000                    |
 | -l addr [addr ...]             | 绑定本地网络地址列表                 | dnspooh -l 0.0.0.0 [::]            |
-| -o file                        | 将 stdout 写入到指定文件             |                                    |
+| -o log                         | 将 stdout 写入到 log 文件            | dnspooh -o output.log              |
 | -D                             | 输出调试信息                         |                                    |
 | -S                             | 仅使用 DoT/DoH 协议的上游服务器      |                                    |
 | -6                             | 启用 IPv6 服务器                     |                                    |
@@ -127,31 +126,37 @@ middlewares:
 
 配置文件支持 `!path` 和 `!include` 两个扩展指令。当配置项目是一个文件名时，使用 `!path` 指令表示以当前配置文件所在路径作为文件相对路径的起始位置，如果不使用 `!path` 指令，则以程序运行路径作为文件相对路径的起始位置。 `!include` 指令用来引用外部 yaml 配置文件，当前配置文件的所在路径作为被引用配置文件相对路径的起始位置。
 
-| 配置名                   | 数据类型     | 默认         | 描述                                                         |
-| ------------------------ | ------------ | ------------ | ------------------------------------------------------------ |
-| debug                    | Boolean      | false        | 控制台/终端是否输出调试信息                                  |
-| listen                   | String/Array | "0.0.0.0:53" | 服务绑定本机地址。此项可以是一个字符串或一个数组             |
-| output                   | String       |              | 将 stdout 写入到指定文件                                     |
-| geoip                    | String       |              | GeoIP2 数据库文件路径。默认使用 [GeoIP2-CN](https://github.com/Hackl0us/GeoIP2-CN) |
-| secure                   | Boolean      | false        | 仅使用安全（DoH / DoT）的上游 DNS 服务器                     |
-| ipv6                     | Boolean      | false        | 启用 IPv6 地址的上游 DNS 服务器                              |
-| timeout                  | Integer      | 5000         | 上游 DNS 服务器响应超时时间（单位：毫秒）                    |
-| proxy                    | String       |              | 代理服务器，支持 HTTP 和 SOCKS5 代理                         |
-| upstreams                | Array        |              | 替换内置上游 DNS 服务器列表                                  |
-| upstreams+               | Array        |              | 追加到内置上游 DNS 服务器列表                                |
-| upstreams_filter         |              |              | 筛选出可用的上游 DNS 服务器                                  |
-| upstreams_filter.name    | Array        |              | 筛选出名称存在于此列表中的服务器                             |
-| upstreams_filter.group   | Array        |              | 筛选出分组存在于此列表中的服务器                             |
-| middlewares              | Array        | ["cache"]    | 启用的中间件。列表定义顺序决定加载顺序                       |
-| rules                    | Array        |              | 自定义规则列表                                               |
-| hosts                    | Array        |              | hosts 文件列表。支持 http/https 链接                         |
-| block                    | Array        |              | 黑名单文件列表。支持 http/https 链接                         |
-| cache                    |              |              | 缓存配置                                                     |
-| cache.max_size           | Integer      | 4096         | 最大缓存条目数                                               |
-| cache.ttl                | Integer      | 86400        | 缓存有效期（单位：秒）                                       |
-| log.path                 | String       | "access.log" | 访问日志的文件路径，日志文件为 SQLite3 数据库格式            |
-| log.trace                | Boolean      | true         | 是否记录调试跟踪信息                                         |
-| log.payload              | Boolean      | true         | 是否记录 DNS 请求和响应的数据                                |
+| 配置名                 | 数据类型     | 默认         | 描述                                                         |
+| ---------------------- | ------------ | ------------ | ------------------------------------------------------------ |
+| debug                  | Boolean      | false        | 控制台/终端是否输出调试信息                                  |
+| listen                 | String/Array | "0.0.0.0:53" | 服务绑定本机地址。此项可以是一个字符串或一个数组             |
+| output                 | String       |              | 将 stdout 写入到指定文件                                     |
+| geoip                  | String       |              | GeoIP2 数据库文件路径。默认使用 [GeoIP2-CN](https://github.com/Hackl0us/GeoIP2-CN) |
+| secure                 | Boolean      | false        | 仅使用安全（DoH / DoT）的上游 DNS 服务器                     |
+| ipv6                   | Boolean      | false        | 启用 IPv6 地址的上游 DNS 服务器                              |
+| timeout                | Integer      | 5000         | 上游 DNS 服务器响应超时时间（单位：毫秒）                    |
+| proxy                  | String       |              | 代理服务器，支持 HTTP 和 SOCKS5 代理                         |
+| upstreams              | Array        |              | 替换内置上游 DNS 服务器列表                                  |
+| upstreams+             | Array        |              | 追加到内置上游 DNS 服务器列表                                |
+| upstreams_filter       |              |              | 筛选出可用的上游 DNS 服务器                                  |
+| upstreams_filter.name  | Array        |              | 筛选出名称存在于此列表中的服务器                             |
+| upstreams_filter.group | Array        |              | 筛选出分组存在于此列表中的服务器                             |
+| middlewares            | Array        | ["cache"]    | 启用的中间件。列表定义顺序决定加载顺序                       |
+| rules                  | Array        |              | 自定义规则列表                                               |
+| hosts                  | Array        |              | hosts 文件列表。支持 http/https 链接                         |
+| block                  | Array        |              | 黑名单文件列表。支持 http/https 链接                         |
+| cache                  |              |              | 缓存配置                                                     |
+| cache.max_size         | Integer      | 4096         | 最大缓存条目数                                               |
+| cache.ttl              | Integer      | 86400        | 缓存有效期（单位：秒）                                       |
+| log.path               | String       | "access.log" | 访问日志的文件路径，日志文件为 SQLite3 数据库格式            |
+| log.trace              | Boolean      | true         | 是否记录调试跟踪信息                                         |
+| log.payload            | Boolean      | true         | 是否记录 DNS 请求和响应的数据                                |
+| http                   |              |              | HTTP 控制接口配置                                            |
+| http.host              | String       | 127.0.0.1    | HTTP 服务监听地址                                            |
+| http.port              | Integer      | 随机         | HTTP 服务监听端口。范围从 1024 到 65535                      |
+| http.timeout           | Integer      | 10000        | HTTP 服务超时时间（单位：毫秒）                              |
+| http.disable           | Boolean      | false        | 是否开启 HTTP 服务                                           |
+| http.root              | String       |              | Web 仪表板前端页面保存路径                                   |
 
 下面的配置文件用于追加上游 DNS 服务器：
 
@@ -177,7 +182,7 @@ upstreams+:
 
 其中 `proxy` 、 `timeout` 、 `disable` 、 `priority` 和 `groups` 都是可选项。
 
-### 2.1 中间件
+### 2.3 中间件
 
 Dnspooh 提供下列中间件：
 
@@ -201,6 +206,270 @@ hosts:
 ```
 
 上面的配置表示，程序每隔 3600 秒重新载入一次 https://raw.hellogithub.com/hosts 的数据。
+
+### 2.4 HTTP 控制接口
+
+Dnspooh 提供了一套 RESTful API 来控制服务，此外项目还提供了一个默认的前端界面。HTTP 服务默认使用 1024 到 65535 范围内的随机端口，HTTP 请求必须带有 `Content-Type: application/json` 头部， POST 请求参数以 JSON 格式传递， GET 请求参数通过 Query String 传递。
+
+如果接口调用失败，返回一个包含 `error` 字段的 JSON 实体。其中 `error` 的值为错误对象，包含 `code` 和 `message` 两个成员。一个典型的错误对象实体如下：
+
+```json
+{
+    "error": {
+        "code": 0,
+        "message": "执行失败"
+    }
+}
+```
+
+#### 2.4.1 获取程序版本
+
+**方法：** GET
+
+**路径：** `/version`
+
+**参数：** 无
+
+**返回值：** JSON 对象
+
+```json
+{ "version": "1.0.0" }
+```
+
+#### 2.4.2 获取服务状态
+
+**方法：** GET
+
+**路径：** `/status`
+
+**参数：** 无
+
+**返回值：**  JSON 对象
+
+```json
+{ "status": "RUNNING" }
+```
+
+`status` 可能的返回值如下（其中几种状态可能永远观测不到）：
+
+- INITIALIZED 已初始化
+- START_PEDDING 正在启动
+- RUNNING 正在运行
+- RESTART_PEDDING 正在重启
+- STOP_PEDDING 正在停止
+- STOPPED 已停止
+
+#### 2.4.3 重启服务
+
+**方法：** POST
+
+**路径：** `/restart`
+
+**参数：** 无
+
+**返回值：**  JSON 对象
+
+```json
+{ "result": true }
+```
+
+#### 2.4.4 获取上游 DNS 服务器
+
+**方法：** GET
+
+**路径：** `/upstream`
+
+**参数：** 无
+
+**返回值：** JSON 对象
+
+```json
+{
+    "primary": {
+        "name": "cloudflare-1",
+        "disable": false,
+        "groups": ["cloudflare", "global", "ipv4"],
+        "health": 100,
+        "host": "1.1.1.1",
+        "port": 53,
+        "priority": 988,
+        "type": "dns"
+    },
+    "upstreams": [
+        {
+            "name": "cloudflare-1",
+            "disable": false,
+            "groups": ["cloudflare", "global", "ipv4"],
+            "health": 100,
+            "host": "1.1.1.1",
+            "port": 53,
+            "priority": 988,
+            "type": "dns"
+        },
+        ... ...
+    ]
+}
+```
+
+#### 2.4.5 设置主 DNS 服务器
+
+**方法：** POST
+
+**路径：** `/upstream/primary`
+
+**参数：** 
+
+| 字段 | 类型   | 描述                               |
+| ---- | ------ | ---------------------------------- |
+| name | String | 服务器名称。例如：`"cloudflare-1"` |
+
+**返回值：** JSON 对象
+
+```json
+{ "result": true }
+```
+
+#### 2.4.6 测试全部 DNS 服务器
+
+**方法：** POST
+
+**路径：** `/upstreams/test-all`
+
+**参数：** 无
+
+**返回值：** JSON 对象
+
+```json
+{ "result": true }
+```
+
+#### 2.4.7 获取连接池
+
+**方法：** GET
+
+**路径：** `/pool`
+
+**参数：** 无
+
+**返回值：** JSON 对象
+
+```json
+{
+    "pool": [
+        { "name": "socks5://127.0.0.1:1080/udp://1.1.1.1:53", "size": 6 },
+        // ... ...
+    ]
+}
+```
+
+#### 2.4.8 获取配置信息
+
+**方法：** GET
+
+**路径：** `/config`
+
+**参数：** 无
+
+**返回值：** JSON 对象
+
+```json
+{
+    "config": [
+        { "name": "debug", "value": false },
+        { "name": "secure", "value": false },
+        { "name": "ipv6", "value": false },
+        // ... ...
+    ]
+}
+```
+
+#### 2.4.9 获取解析日志
+
+**方法：** GET
+
+**路径：** `/logs`
+
+**参数：** 
+
+| 字段 | 类型    | 描述                   |
+| ---- | ------- | ---------------------- |
+| page | Integer | 页码。每页 50 条数据。 |
+
+**返回值：** JSON 对象
+
+```json
+{
+    "total": 12,
+    "page": {
+        "current": 1,
+        "size": 50,
+        "count": 1
+    },
+    "logs": [
+        {
+            "id": 12,
+            "created_at": "2023-03-08 18:49:19",
+            "elapsed_time": 0.004754199995659292,
+            "qname": "www.google.com.",
+            "qtype": "AAAA",
+            "success": 1,
+            "traceback": "[\"cache\", \"block\", \"Server\", \"alidns-1\"]",
+            "error": null
+        },
+        // ... ...
+    ]
+}
+```
+
+#### 2.4.10 域名解析
+
+**方法：** POST
+
+**路径：** `/dns-query`
+
+**参数：** 
+
+| 字段   | 类型   | 描述   |
+| ------ | ------ | ------ |
+| domain | String | 域名。 |
+
+**返回值：** JSON 对象
+
+```json
+{ "result": ";; ->>HEADER<<- opcode: QUERY, status: NOERROR... ..." }
+```
+
+#### 2.4.11 查询 IP 地理位置
+
+**方法：** POST
+
+**路径：** `/geoip2-query`
+
+**参数：** 无
+
+**返回值：** JSON 对象
+
+```json
+{
+    "result": {
+        "country": {
+            "geoname_id": 1814991,
+            "is_in_european_union": false,
+            "iso_code": "CN",
+            "names": {
+                "de": "China",
+                "en": "China",
+                "es": "China",
+                "fr": "Chine",
+                "ja": "\u4e2d\u56fd",
+                "pt-BR": "China",
+                "ru": "\u041a\u0438\u0442\u0430\u0439",
+                "zh-CN": "\u4e2d\u56fd"
+            }
+        }
+    }
+}
+```
 
 ## 3. 自定义规则
 
