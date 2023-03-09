@@ -33,7 +33,7 @@
         </tr>
     </thead>
     <tbody>
-        {#each payload.pool as conn}
+        {#each payload.result as conn}
         <tr>
             <td>{conn.name}</td>
             <td>{conn.size}</td>

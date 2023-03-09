@@ -16,7 +16,7 @@
             <div class="media-content">
                 <p class="title is-4">Dnspooh</p>
                 {#await get('/version') then payload}
-                <p class="subtitle is-6">版本 {payload.version}</p>
+                <p class="subtitle is-6">版本 {payload.result}</p>
                 {/await}
             </div>
         </div>

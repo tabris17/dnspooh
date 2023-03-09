@@ -27,7 +27,7 @@
         </tr>
     </thead>
     <tbody>
-        {#each payload.config as item}
+        {#each payload.result as item}
         <ConfigItem item={item}/>
         {/each}
     </tbody>

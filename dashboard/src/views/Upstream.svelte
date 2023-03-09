@@ -53,7 +53,7 @@
 
 <PageTitle text={'上游节点'}>
     <p class="subtitle" slot="left">
-        {#await query then payload}({payload.upstreams.length}){/await}
+        {#await query then payload}({payload.result.upstreams.length}){/await}
     </p>
     <div class="buttons" slot="right">
         <button class="button is-info is-light" class:is-loading="{testAllPedding}" on:click={testAll}>测试全部节点</button>
@@ -74,11 +74,11 @@
 </article>
 {:else}
 <div class="columns is-multiline is-size-7">
-    {#each payload.upstreams as upstream}
+    {#each payload.result.upstreams as upstream}
     <div class="column is-one-quarter">
         <div 
             class="card" 
-            class:is-primary="{payload.primary.name == upstream.name}"
+            class:is-primary="{payload.result.primary.name == upstream.name}"
             class:is-disabled="{upstream.disable}"
         >
             <div class="field">
@@ -108,7 +108,7 @@
                   <footer class="card-footer">
                     {#if upstream.disable}
                     <p class="card-footer-item">不可用</p>
-                    {:else if payload.primary.name == upstream.name}
+                    {:else if payload.result.primary.name == upstream.name}
                     <p class="card-footer-item">主节点</p>
                     {:else}
                     <a on:click={handleSelectPrimaryUpstream} class="card-footer-item" data-name="{upstream.name}">设为主节点</a>
