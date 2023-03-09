@@ -48,10 +48,10 @@
 </script>
 
 <PageTitle text="Dnspooh 服务">
-    <p class="subtitle" slot="left">{#await query then payload}{getStatusText(payload.status)}{/await}</p>
+    <p class="subtitle" slot="left">{#await query then payload}{getStatusText(payload.result)}{/await}</p>
     <div class="buttons" slot="right">
         {#await query then payload}
-        {#if payload.status == 'RUNNING'}
+        {#if payload.result == 'RUNNING'}
         <button class="button is-info is-light" class:is-loading="{restartPedding}" on:click={restart}>重启</button>
         {/if}
         {/await}
