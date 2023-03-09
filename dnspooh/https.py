@@ -705,3 +705,8 @@ def response_json_error(message, code=JSONError.USER_DEFINED.code):
             'message': str(message),
         }
     })
+
+def response_json_result(result):
+    return JsonResponse({
+        'result': result
+    })
