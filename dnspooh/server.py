@@ -535,8 +535,12 @@ class Server:
         return https.response_json_result(await self.test_upstream(self.upstreams[name], TEST_DOMAIN))
 
     @https.async_json_handler
-    async def _handle_dns_query(self, domain):
+    async def _handle_dns_query(self, domain, qtype):
         request = dnslib.DNSRecord.question(domain)
+        try:
+            request.q.qtype = getattr(dnslib.QTYPE, qtype)
+        except dnslib.DNSError:
+            return https.response_json_error('Invalid QTYPE name %s' % qtype)
         response = await self._handle(request)
         if response is None:
             return https.response_json_error('Failed to resolve domain name %s' % domain)
