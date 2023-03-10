@@ -1,6 +1,7 @@
 import logging
 import sqlite3
 import time
+import json
 
 import dnslib
 
@@ -72,6 +73,16 @@ class LogMiddleware(Middleware):
                 'page_size': page_size
             })
             field_names = [column[0] for column in result.description]
+            def format_row(row):
+                record = dict(zip(field_names, row))
+                traceback = record['traceback']
+                if traceback:
+                    try:
+                        record['traceback'] = json.loads(traceback)
+                    except json.JSONDecodeError:
+                        record['traceback'] = None
+                return record
+            return list(map(format_row, result))
             return [dict(zip(field_names, row)) for row in result]
 
     def query_total(self):
