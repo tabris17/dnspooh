@@ -1,6 +1,6 @@
 # Dnspooh
 
-Dnspooh 是一个轻量级 DNS 中继和代理服务器，可以为本机或本地网络提供安全的 DNS 解析服务，支持代理服务器、 hosts 文件、域名和 IP 黑名单，以及自定义规则。
+Dnspooh 是一个轻量级 DNS 中继和代理服务器，可以为本机或本地网络提供安全的 DNS 解析服务。程序提供一个网页前端管理界面，支持代理服务器、 hosts 文件、域名和 IP 黑名单，以及自定义规则。
 
 ## 1. 安装和运行
 
@@ -42,7 +42,7 @@ python main.py --help
 
 ### 1.3 可执行文件
 
-将[下载](https://github.com/tabris17/dnspooh/releases)的 `dnspooh-vX.Y.Z-win-amd64.zip` （其中 X.Y.Z 是版本号）文件解压缩保存在本地，运行其中的 `dnspooh.exe` 可执行文件。
+可以在 <https://github.com/tabris17/dnspooh/releases> 页面中下载软件的 Windows 可执行文件。将下载的 `dnspooh-vX.Y.Z-win-amd64.zip` （其中 X.Y.Z 是版本号）文件解压缩保存在本地，运行其中的 `dnspooh.exe` 可执行文件。
 
 ## 2. 使用方法
 
@@ -194,7 +194,7 @@ Dnspooh 提供下列中间件：
 
 4. Cache 缓存上游服务器的解析结果
 
-5. Log 数据库型日志
+5. Log 解析日志
 
 这些中间件可以在配置文件中开启。在默认配置下，仅启用 Cache 中间件。中间件采用装饰器模式，先加载的中间件处于封装内层，后加载的中间件处于外层。建议按照本文档中的列表顺序定义。
 
@@ -209,9 +209,11 @@ hosts:
 
 ### 2.4 HTTP 控制接口
 
-Dnspooh 提供了一套 RESTful API 来控制服务，此外项目还提供了一个默认的前端界面。HTTP 服务默认使用 1024 到 65535 范围内的随机端口，HTTP 请求必须带有 `Content-Type: application/json` 头部， POST 请求参数以 JSON 格式传递， GET 请求参数通过 Query String 传递。
+Dnspooh 提供了一套 RESTful API 来控制服务， HTTP 请求必须带有 `Content-Type: application/json` 头部， POST 请求参数以 JSON 格式传递， GET 请求参数通过 Query String 传递。
 
-如果接口调用失败，返回一个包含 `error` 字段的 JSON 实体。其中 `error` 的值为错误对象，包含 `code` 和 `message` 两个成员。一个典型的错误对象实体如下：
+HTTP 服务默认绑定 127.0.0.1 地址，使用 1024 到 65535 范围内的随机端口，程序启动时会在命令行终端输出 HTTP 接口的 URL 地址。
+
+如果接口调用成功，返回一个包含 `result` 字段的 JSON 实体。其中 `result` 字段的值为接口返回值。如果接口调用失败，返回一个包含 `error` 字段的 JSON 实体。其中 `error` 字段的值为错误对象，包含 `code` 和 `message` 两个成员。一个典型的错误对象实体如下：
 
 ```json
 {
@@ -230,10 +232,10 @@ Dnspooh 提供了一套 RESTful API 来控制服务，此外项目还提供了�
 
 **参数：** 无
 
-**返回值：** JSON 对象
+**返回值：** String
 
 ```json
-{ "version": "1.0.0" }
+{ "result": "1.0.0" }
 ```
 
 #### 2.4.2 获取服务状态
@@ -244,10 +246,10 @@ Dnspooh 提供了一套 RESTful API 来控制服务，此外项目还提供了�
 
 **参数：** 无
 
-**返回值：**  JSON 对象
+**返回值：** String
 
 ```json
-{ "status": "RUNNING" }
+{ "result": "RUNNING" }
 ```
 
 `status` 可能的返回值如下（其中几种状态可能永远观测不到）：
@@ -261,13 +263,15 @@ Dnspooh 提供了一套 RESTful API 来控制服务，此外项目还提供了�
 
 #### 2.4.3 重启服务
 
+重启服务不会影响 HTTP 服务。重启服务过程中会重新载入并应用配置文件，但修改配置文件中的 `http` 下的配置不会因重启服务而生效。
+
 **方法：** POST
 
 **路径：** `/restart`
 
 **参数：** 无
 
-**返回值：**  JSON 对象
+**返回值：** Boolean
 
 ```json
 { "result": true }
@@ -285,18 +289,8 @@ Dnspooh 提供了一套 RESTful API 来控制服务，此外项目还提供了�
 
 ```json
 {
-    "primary": {
-        "name": "cloudflare-1",
-        "disable": false,
-        "groups": ["cloudflare", "global", "ipv4"],
-        "health": 100,
-        "host": "1.1.1.1",
-        "port": 53,
-        "priority": 988,
-        "type": "dns"
-    },
-    "upstreams": [
-        {
+    "result": {
+        "primary": {
             "name": "cloudflare-1",
             "disable": false,
             "groups": ["cloudflare", "global", "ipv4"],
@@ -306,8 +300,20 @@ Dnspooh 提供了一套 RESTful API 来控制服务，此外项目还提供了�
             "priority": 988,
             "type": "dns"
         },
-        ... ...
-    ]
+        "upstreams": [
+            {
+                "name": "cloudflare-1",
+                "disable": false,
+                "groups": ["cloudflare", "global", "ipv4"],
+                "health": 100,
+                "host": "1.1.1.1",
+                "port": 53,
+                "priority": 988,
+                "type": "dns"
+            },
+            // ... ...
+        ]
+    }
 }
 ```
 
@@ -323,7 +329,7 @@ Dnspooh 提供了一套 RESTful API 来控制服务，此外项目还提供了�
 | ---- | ------ | ---------------------------------- |
 | name | String | 服务器名称。例如：`"cloudflare-1"` |
 
-**返回值：** JSON 对象
+**返回值：** Boolean
 
 ```json
 { "result": true }
@@ -337,7 +343,7 @@ Dnspooh 提供了一套 RESTful API 来控制服务，此外项目还提供了�
 
 **参数：** 无
 
-**返回值：** JSON 对象
+**返回值：** Boolean
 
 ```json
 { "result": true }
@@ -351,11 +357,11 @@ Dnspooh 提供了一套 RESTful API 来控制服务，此外项目还提供了�
 
 **参数：** 无
 
-**返回值：** JSON 对象
+**返回值：** Array
 
 ```json
 {
-    "pool": [
+    "result": [
         { "name": "socks5://127.0.0.1:1080/udp://1.1.1.1:53", "size": 6 },
         // ... ...
     ]
@@ -370,11 +376,11 @@ Dnspooh 提供了一套 RESTful API 来控制服务，此外项目还提供了�
 
 **参数：** 无
 
-**返回值：** JSON 对象
+**返回值：** Array
 
 ```json
 {
-    "config": [
+    "result": [
         { "name": "debug", "value": false },
         { "name": "secure", "value": false },
         { "name": "ipv6", "value": false },
@@ -399,25 +405,27 @@ Dnspooh 提供了一套 RESTful API 来控制服务，此外项目还提供了�
 
 ```json
 {
-    "total": 12,
-    "page": {
-        "current": 1,
-        "size": 50,
-        "count": 1
-    },
-    "logs": [
-        {
-            "id": 12,
-            "created_at": "2023-03-08 18:49:19",
-            "elapsed_time": 0.004754199995659292,
-            "qname": "www.google.com.",
-            "qtype": "AAAA",
-            "success": 1,
-            "traceback": "[\"cache\", \"block\", \"Server\", \"alidns-1\"]",
-            "error": null
+    "result": {
+        "total": 12,
+        "page": {
+            "current": 1,
+            "size": 50,
+            "count": 1
         },
-        // ... ...
-    ]
+        "logs": [
+            {
+                "id": 12,
+                "created_at": "2023-03-08 18:49:19",
+                "elapsed_time": 0.004754199995659292,
+                "qname": "www.google.com.",
+                "qtype": "AAAA",
+                "success": 1,
+                "traceback": ["cache", "block", "Server", "alidns-1"],
+                "error": null
+            },
+            // ... ...
+        ]
+    }
 }
 ```
 
@@ -433,10 +441,10 @@ Dnspooh 提供了一套 RESTful API 来控制服务，此外项目还提供了�
 | ------ | ------ | ------ |
 | domain | String | 域名。 |
 
-**返回值：** JSON 对象
+**返回值：**String
 
 ```json
-{ "result": ";; ->>HEADER<<- opcode: QUERY, status: NOERROR... ..." }
+{ "result": ";; ->>HEADER<<- opcode: QUERY, status: NOERROR, ... ..." }
 ```
 
 #### 2.4.11 查询 IP 地理位置
@@ -470,6 +478,19 @@ Dnspooh 提供了一套 RESTful API 来控制服务，此外项目还提供了�
     }
 }
 ```
+
+### 2.5 Web 管理界面
+
+![Screenshot](./assets/screenshot.png?raw=true)
+
+要启用 Web 管理界面需要在配置文件中指定前端文件的保存路径：
+
+```yaml
+http
+  root: dashboard/public
+```
+
+在发布的可执行软件包中已经预置了 Web 前端而无需另外配置。
 
 ## 3. 自定义规则
 

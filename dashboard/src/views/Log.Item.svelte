@@ -18,5 +18,5 @@
     <td class="has-text-right">{item.qname}</td>
     <td>{item.qtype}</td>
     <td class="has-text-centered">{#if item.success}√{:else}<abbr title={item.error}>错误</abbr>{/if}</td>
-    <td>{#if item.traceback}{JSON.parse(item.traceback)}{/if}</td>
+    <td>{#if item.traceback}{item.traceback}{/if}</td>
 </tr>

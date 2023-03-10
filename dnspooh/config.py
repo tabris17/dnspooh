@@ -1,3 +1,4 @@
+import copy
 import logging
 import yaml
 import pathlib
@@ -603,7 +604,7 @@ class Config:
                conf = _merge_dict_recursive(conf, _load_from_file(config_file))
                logger.info('Default config file "%s" loaded', config_file.absolute())
 
-        conf = _merge_dict_recursive(conf, DEFAULT_CONFIG, ['upstreams'])
+        conf = _merge_dict_recursive(conf, copy.deepcopy(DEFAULT_CONFIG), ['upstreams'])
 
         try:
             conf['proxy'] = parse_proxy(conf.get('proxy'))

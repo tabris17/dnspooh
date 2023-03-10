@@ -476,19 +476,13 @@ class Server:
             case https.HTTPMethod.GET, '/':
                 return https.Response(body='Dnspooh is working')
             case https.HTTPMethod.GET, '/status':
-                return https.JsonResponse({
-                    'status': self.status.name,
-                })
+                return https.response_json_result(self.status.name)
             case https.HTTPMethod.POST, '/restart':
-                return https.JsonResponse({
-                    'result': self.restart(),
-                })
+                return https.response_json_result(self.restart())
             case https.HTTPMethod.GET, '/version':
-                return https.JsonResponse({
-                    'version': version.__version__
-                })
+                return https.response_json_result(version.__version__)
             case https.HTTPMethod.GET, '/upstreams':
-                return https.JsonResponse({
+                return https.response_json_result({
                     'upstreams': self.upstreams,
                     'primary': self.upstreams.primary,
                 })
@@ -499,13 +493,9 @@ class Server:
             case https.HTTPMethod.POST, '/upstreams/test-all':
                 return await self._handle_test_all_upstream()
             case https.HTTPMethod.GET, '/pool':
-                return https.JsonResponse({
-                    'pool': self.pool,
-                })
+                return https.response_json_result(self.pool)
             case https.HTTPMethod.GET, '/config':
-                return https.JsonResponse({
-                    'config': self.config,
-                })
+                return https.response_json_result(self.config)
             case https.HTTPMethod.GET, '/logs':
                 return self._handle_query_access_log(request)
             case https.HTTPMethod.POST, '/dns-query':
@@ -522,7 +512,7 @@ class Server:
         page = request.get_int('page', 1)
         total = log_middleware.query_total()
         page_size = middlewares.log.QUERY_PAGE_SIZE
-        return https.JsonResponse({
+        return https.response_json_result({
             'total': total,
             'page': {
                 'current': page,
@@ -535,28 +525,26 @@ class Server:
     @https.json_handler
     def _handle_select_primary_upstream(self, name):
         self.upstreams.select(name)
-        return https.JsonResponse({
-            'result': True,
-        })
+        return https.response_json_result(True)
 
     @https.async_json_handler
     async def _handle_test_upstream(self, name):
         if name not in self.upstreams:
             return https.JsonResponse(https.JSONError.ILLEGAL_PARAM, 
                                       https.HTTPStatus.BAD_REQUEST) 
-        return https.JsonResponse({
-            'result': await self.test_upstream(self.upstreams[name], TEST_DOMAIN),
-        })
+        return https.response_json_result(await self.test_upstream(self.upstreams[name], TEST_DOMAIN))
 
     @https.async_json_handler
-    async def _handle_dns_query(self, domain):
+    async def _handle_dns_query(self, domain, qtype):
         request = dnslib.DNSRecord.question(domain)
-        response = await self.handle(request)
+        try:
+            request.q.qtype = getattr(dnslib.QTYPE, qtype)
+        except dnslib.DNSError:
+            return https.response_json_error('Invalid QTYPE name %s' % qtype)
+        response = await self._handle(request)
         if response is None:
             return https.response_json_error('Failed to resolve domain name %s' % domain)
-        return https.JsonResponse({
-            'result': str(response)
-        })
+        return https.response_json_result(str(response))
 
     @https.async_json_handler
     async def _handle_geoip2_query(self, ip):
@@ -564,12 +552,8 @@ class Server:
             result = self.open_geoip().get(ip)
         except ValueError as exc:
             return https.response_json_error(exc)
-        return https.JsonResponse({
-            'result': result
-        })
+        return https.response_json_result(result)
 
     async def _handle_test_all_upstream(self):
         await self.test_all_upstreams(TEST_DOMAIN, True)
-        return https.JsonResponse({
-            'result': True,
-        })
+        return https.response_json_result(True)

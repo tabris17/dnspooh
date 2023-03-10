@@ -7,7 +7,7 @@
             case 'upstreams':
                 return `<${value.name}>`
             case 'rules':
-                return `<if: ${value.if}>`
+                return `<if: ${value.if.length > 36 ? value.if.substr(0, 36) + ' ... ': value.if}>`
             case 'listen':
                 return value[0] + ':' + value[1];
         }

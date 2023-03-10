@@ -16,7 +16,7 @@
 <PageTitle text="解析日志">
     <div slot="right">
         {#await query then payload}
-        {#if !payload.error}<Paginator page={payload.page} handle={handlePagination}/>{/if}
+        {#if !payload.error}<Paginator page={payload.result.page} handle={handlePagination}/>{/if}
         {/await}
     </div>
 </PageTitle>
@@ -35,7 +35,7 @@
         <tr>
           <th>#</th>
           <th>请求时间</th>
-          <th>耗时</th>
+          <th>耗时（秒）</th>
           <th>域名</th>
           <th>类型</th>
           <th>成功</th>
@@ -43,7 +43,7 @@
         </tr>
     </thead>
     <tbody>
-        {#each payload.logs as item}
+        {#each payload.result.logs as item}
         <LogItem item={item}/>
         {/each}
     </tbody>
