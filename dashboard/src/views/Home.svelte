@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { onDestroy } from 'svelte'
     import PageTitle from '../components/PageTitle.svelte'
     import { get, post } from '../utils'
 
@@ -44,7 +45,9 @@
         queryGeoIP2 = post('/geoip2-query', {ip: ip})
     }
 
-    setInterval(() => reload(), 5000)
+    const interval = setInterval(() => reload(), 5000)
+
+    onDestroy(() => clearInterval(interval))
 </script>
 
 <PageTitle text="Dnspooh 服务">
