@@ -537,7 +537,7 @@ class Server:
     @https.async_json_handler
     async def _handle_dns_query(self, domain):
         request = dnslib.DNSRecord.question(domain)
-        response = await self.handle(request)
+        response = await self._handle(request)
         if response is None:
             return https.response_json_error('Failed to resolve domain name %s' % domain)
         return https.response_json_result(str(response))
