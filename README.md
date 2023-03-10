@@ -481,7 +481,7 @@ HTTP 服务默认绑定 127.0.0.1 地址，使用 1024 到 65535 范围内的随
 
 ### 2.5 Web 管理界面
 
-![截图](./assets/screenshot.png)
+![Screenshot](./assets/screenshot.png?raw=true)
 
 要启用 Web 管理界面需要在配置文件中指定前端文件的保存路径：
 
