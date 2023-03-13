@@ -43,10 +43,43 @@ INSERT_SUCCESS_SQL = \
 
 SELECT_DATASET_SQL = \
 '''SELECT id, created_at, elapsed_time, qname, qtype, success, traceback, error 
-    FROM "log" ORDER BY id DESC LIMIT :offset, :page_size
+    FROM "log" {where} ORDER BY id DESC LIMIT :offset, :page_size
 '''
 
+COUNT_DATASET_SQL = 'SELECT COUNT(*) FROM "log" {where}'
+
+TRUNCATE_TABLE_SQL = 'DELETE FROM "log"'
+
 QUERY_PAGE_SIZE = 50
+
+
+class Query:
+    def __init__(self, sql):
+        self.sql = sql
+        self.conditions = []
+        self.params = dict()
+
+    def where(self, expr, **kwargs):
+        self.params |= kwargs
+        placeholders = { key: ':%s' % key for key in kwargs.keys() }
+        self.conditions.append(expr.format(**placeholders))
+
+    def __repr__(self):
+        if not self.conditions:
+            return ''
+        return 'WHERE ' + ' AND '.join(self.conditions)
+
+    def query(self, db, params=None):
+        sql = self.sql.format(where=str(self))
+        if params is None:
+            return db.execute(sql, self.params)
+        return db.execute(sql, self.params | params)
+    
+
+def _quote_like(value):
+    return '%%%s%%' % value \
+        .replace('%', '\\%') \
+        .replace('_', '\\_')
 
 
 class LogMiddleware(Middleware):
@@ -65,12 +98,18 @@ class LogMiddleware(Middleware):
     def _open_db(self):
         return sqlite3.connect(self.path)
 
-    def query_dataset(self, page, page_size=QUERY_PAGE_SIZE):
+    def query_dataset(self, page, qname=None, qtype=None, page_size=QUERY_PAGE_SIZE):
         offset = (page - 1) * page_size
+        query = Query(SELECT_DATASET_SQL)
+        if qname:
+            query.where('qname like {qname}', qname=_quote_like(qname))
+        if qtype:
+            query.where('qtype={qtype}', qtype=qtype)
+
         with self._open_db() as db:
-            result = db.execute(SELECT_DATASET_SQL, {
+            result = query.query(db, {
                 'offset': offset,
-                'page_size': page_size
+                'page_size': page_size,
             })
             field_names = [column[0] for column in result.description]
             def format_row(row):
@@ -84,11 +123,21 @@ class LogMiddleware(Middleware):
                 return record
             return list(map(format_row, result))
 
-    def query_total(self):
+    def query_total(self, qname=None, qtype=None):
+        query = Query(COUNT_DATASET_SQL)
+        if qname:
+            query.where('qname like {qname}', qname=_quote_like(qname))
+        if qtype:
+            query.where('qtype={qtype}', qtype=qtype)
         with self._open_db() as db:
-            result = db.execute('SELECT COUNT(*) FROM "log"')
+            result = query.query(db)
             total, = result.fetchone()
             return total
+
+    def clear_dataset(self):
+        with self._open_db() as db:
+            db.execute(TRUNCATE_TABLE_SQL)
+        return True
 
     async def handle(self, request, **kwargs):
         if self.trace:
