@@ -498,6 +498,8 @@ class Server:
                 return https.response_json_result(self.config)
             case https.HTTPMethod.GET, '/logs':
                 return self._handle_query_access_log(request)
+            case https.HTTPMethod.POST, '/logs/clear':
+                return self._handle_clear_access_log()
             case https.HTTPMethod.POST, '/dns-query':
                 return await self._handle_dns_query(request)
             case https.HTTPMethod.POST, '/geoip2-query':
@@ -510,7 +512,9 @@ class Server:
             return https.response_json_error('The log middleware is not enabled')
 
         page = request.get_int('page', 1)
-        total = log_middleware.query_total()
+        qname = request.get('qname')
+        qtype = request.get('qtype')
+        total = log_middleware.query_total(qname, qtype)
         page_size = middlewares.log.QUERY_PAGE_SIZE
         return https.response_json_result({
             'total': total,
@@ -519,8 +523,15 @@ class Server:
                 'size': page_size,
                 'count': math.ceil(total / page_size),
             },
-            'logs': log_middleware.query_dataset(page),
+            'logs': log_middleware.query_dataset(page, qname, qtype),
         })
+    
+    def _handle_clear_access_log(self):
+        log_middleware = self.middlewares.get_component('log')
+        if not isinstance(log_middleware, middlewares.LogMiddleware):
+            return https.response_json_error('The log middleware is not enabled')
+
+        return https.response_json_result(log_middleware.clear_dataset())
 
     @https.json_handler
     def _handle_select_primary_upstream(self, name):
