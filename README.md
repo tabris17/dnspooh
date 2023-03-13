@@ -699,8 +699,21 @@ python -m unittest tests
 
 Windows 下使用 Nuitka 生成可执行文件：
 
-```powershell
+```shell
 pip install nuitka ordered-set zstandard dnspooh
 nuitka --standalone --output-dir=build --output-filename=dnspooh --windows-icon-from-ico=./assets/favicon.ico --include-package-data=dnspooh --onefile main.py
+```
+
+启动 Web 管理界面前端开发环境：
+
+```shell
+npm i
+npm run dev
+```
+
+构建 Web 管理界面前端：
+
+```shell
+npm run build
 ```
 
