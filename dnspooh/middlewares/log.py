@@ -83,7 +83,6 @@ class LogMiddleware(Middleware):
                         record['traceback'] = None
                 return record
             return list(map(format_row, result))
-            return [dict(zip(field_names, row)) for row in result]
 
     def query_total(self):
         with self._open_db() as db:
