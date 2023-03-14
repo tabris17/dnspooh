@@ -13,6 +13,9 @@ from .upstream import *
 logger = logging.getLogger(__name__)
 
 
+LOGGING_FORMAT = "%(asctime)s [%(name)s.%(levelname)s] %(message)s"
+
+
 def parse_arguments():
     parser = argparse.ArgumentParser(
         prog = __package__,
@@ -54,7 +57,9 @@ async def startup():
             
         output_file = config.get('output')
         if output_file:
-            logging.root.addHandler(logging.FileHandler(output_file))
+            file_handler = logging.FileHandler(output_file)
+            file_handler.setFormatter(logging.Formatter(LOGGING_FORMAT))
+            logging.root.addHandler(file_handler)
 
         debug = config['debug']
         if debug:
@@ -82,7 +87,7 @@ async def startup():
 def main():
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s [%(name)s.%(levelname)s] %(message)s",
+        format=LOGGING_FORMAT,
         handlers=[logging.StreamHandler()]
     )
     try:
