@@ -527,6 +527,9 @@ def _load_from_args(args):
     if args.upstreams is not None:
         conf['upstreams'] = args.upstreams
 
+    if args.output is not None:
+        conf['output'] = args.output
+
     if args.public is not None:
         conf['http'] = { 'root': args.public }
 
