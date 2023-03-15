@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 
 TEST_DOMAIN = 'www.google.com'
 
+TEST_GEOIP = '114.114.114.114'
+
+TEST_NETWORK = ('1.1.1.1', 53)
+
 
 class ServerProtocol(asyncio.DatagramProtocol):
     def __init__(self, server):
@@ -93,10 +97,23 @@ class Server:
         self.transports = []
         logger.debug('DNS serivce initialized')
 
+    async def _wait_for_network(self):
+        import socket
+        while True:
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                sock.sendto(b'\x00', TEST_NETWORK)
+                sock.close()
+                break
+            except:
+                logger.warning('Network is unreachable, wait a second')
+            await asyncio.sleep(1)
+        logger.info('Network is available')
+
     async def bootstrap(self):
         logger.debug('DNS service bootstrapping')
 
-        if self.test_geoip('114.114.114.114', 'cn'):
+        if self.test_geoip(TEST_GEOIP, 'cn'):
             logger.info('Test GeoIP2 database passed')
         else:
             logger.warning('Test GeoIP2 database failed')
@@ -109,6 +126,9 @@ class Server:
         self.proxy = self.config['proxy']
         if self.proxy:
             logger.info('Using proxy %s', self.proxy)
+
+        await self._wait_for_network()
+
         bootstrap_upstreams = []
         hostname_upstreams = []
         named_upstreams = dict()
@@ -128,9 +148,10 @@ class Server:
             request = dnslib.DNSRecord.question(hostname_upstream.hostname)
             response = await self.handle(request, upstreams=bootstrap_upstreams)
             if not response or response.header.a == 0:
-                logger.warning('Failed to resolve upstream domain "%s"', hostname_upstream.hostname)
+                logger.warning('Failed to resolve upstream "%s" hostname', hostname_upstream.name)
                 hostname_upstream.disable = True
             else:
+                logger.info('Upstream "%s" hostname available', hostname_upstream.name)
                 hostname_upstream.host = str(response.rr[0].rdata)
 
         await asyncio.gather(*[
