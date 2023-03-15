@@ -2,6 +2,7 @@ import copy
 import logging
 import yaml
 import pathlib
+import sys
 
 try:
     from yaml import CSafeLoader as YAMLLoader
@@ -606,9 +607,13 @@ class Config:
             logger.info('Config file "%s" loaded', config_file.absolute())
         else:
             config_file = pathlib.Path(CONFIG_FILE)
-            if config_file.is_file():
-               conf = _merge_dict_recursive(conf, _load_from_file(config_file))
-               logger.info('Default config file "%s" loaded', config_file.absolute())
+            if not config_file.is_file():
+                config_file = pathlib.Path(sys.path[0]).joinpath(CONFIG_FILE)
+            try:
+                conf = _merge_dict_recursive(conf, _load_from_file(config_file))
+                logger.info('Default config file "%s" loaded', config_file.absolute())
+            except:
+                pass
 
         conf = _merge_dict_recursive(conf, copy.deepcopy(DEFAULT_CONFIG), ['upstreams'])
 
