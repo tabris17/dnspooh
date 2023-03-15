@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 
 TEST_DOMAIN = 'www.google.com'
 
+TEST_GEOIP = '114.114.114.114'
+
+TEST_NETWORK = ('1.1.1.1', 53)
+
 
 class ServerProtocol(asyncio.DatagramProtocol):
     def __init__(self, server):
@@ -93,10 +97,23 @@ class Server:
         self.transports = []
         logger.debug('DNS serivce initialized')
 
+    async def _wait_for_network(self):
+        import socket
+        while True:
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                sock.sendto(b'\x00', TEST_NETWORK)
+                sock.close()
+                break
+            except:
+                logger.warning('Network is unreachable, wait a second')
+            await asyncio.sleep(1)
+        logger.info('Network is available')
+
     async def bootstrap(self):
         logger.debug('DNS service bootstrapping')
 
-        if self.test_geoip('114.114.114.114', 'cn'):
+        if self.test_geoip(TEST_GEOIP, 'cn'):
             logger.info('Test GeoIP2 database passed')
         else:
             logger.warning('Test GeoIP2 database failed')
@@ -109,6 +126,9 @@ class Server:
         self.proxy = self.config['proxy']
         if self.proxy:
             logger.info('Using proxy %s', self.proxy)
+
+        await self._wait_for_network()
+
         bootstrap_upstreams = []
         hostname_upstreams = []
         named_upstreams = dict()
@@ -128,9 +148,10 @@ class Server:
             request = dnslib.DNSRecord.question(hostname_upstream.hostname)
             response = await self.handle(request, upstreams=bootstrap_upstreams)
             if not response or response.header.a == 0:
-                logger.warning('Failed to resolve upstream domain "%s"', hostname_upstream.hostname)
+                logger.warning('Failed to resolve upstream "%s" hostname', hostname_upstream.name)
                 hostname_upstream.disable = True
             else:
+                logger.info('Upstream "%s" hostname available', hostname_upstream.name)
                 hostname_upstream.host = str(response.rr[0].rdata)
 
         await asyncio.gather(*[
@@ -498,6 +519,8 @@ class Server:
                 return https.response_json_result(self.config)
             case https.HTTPMethod.GET, '/logs':
                 return self._handle_query_access_log(request)
+            case https.HTTPMethod.POST, '/logs/clear':
+                return self._handle_clear_access_log()
             case https.HTTPMethod.POST, '/dns-query':
                 return await self._handle_dns_query(request)
             case https.HTTPMethod.POST, '/geoip2-query':
@@ -510,7 +533,9 @@ class Server:
             return https.response_json_error('The log middleware is not enabled')
 
         page = request.get_int('page', 1)
-        total = log_middleware.query_total()
+        qname = request.get('qname')
+        qtype = request.get('qtype')
+        total = log_middleware.query_total(qname, qtype)
         page_size = middlewares.log.QUERY_PAGE_SIZE
         return https.response_json_result({
             'total': total,
@@ -519,8 +544,15 @@ class Server:
                 'size': page_size,
                 'count': math.ceil(total / page_size),
             },
-            'logs': log_middleware.query_dataset(page),
+            'logs': log_middleware.query_dataset(page, qname, qtype),
         })
+    
+    def _handle_clear_access_log(self):
+        log_middleware = self.middlewares.get_component('log')
+        if not isinstance(log_middleware, middlewares.LogMiddleware):
+            return https.response_json_error('The log middleware is not enabled')
+
+        return https.response_json_result(log_middleware.clear_dataset())
 
     @https.json_handler
     def _handle_select_primary_upstream(self, name):

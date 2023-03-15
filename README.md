@@ -53,23 +53,23 @@ python main.py --help
 通过命令行的 `--help` 参数可以查看 Dnspooh 支持的命令行参数：
 
 ```text
-usage: dnspooh [-c file] [-u dns_server [dns_server ...]] [-t ms] [-l addr [addr ...]] [-o log] [-S] [-6] [-D] [-d] [-v] [-h]
+usage: dnspooh [-c file] [-l addr [addr ...]] [-o log] [-p dir] [-t ms] [-u dns_server [dns_server ...]] [-6] [-D] [-d] [-S] [-v] [-h]
 
 A Lightweight DNS MitM Proxy
 
-options:
   -c file, --config file
                         config file path (example "config.yml")
-  -u dns_server [dns_server ...], --upstream dns_server [dns_server ...]
-                        space-separated upstream DNS servers list
-  -t ms, --timeout ms   milliseconds for upstream DNS response timeout (default 5000 ms)
   -l addr [addr ...], --listen addr [addr ...]
                         binding to local address and port for DNS proxy server (default "0.0.0.0:53")
   -o log, --output log  write stdout to the specified file
-  -S, --secure-only     use DoT/DoH upstream servers only
+  -p dir, --public dir  specify http server root directory
+  -t ms, --timeout ms   milliseconds for upstream DNS response timeout (default 5000 ms)
+  -u dns_server [dns_server ...], --upstream dns_server [dns_server ...]
+                        space-separated upstream DNS servers list
   -6, --enable-ipv6     enable IPv6 upstream servers
   -D, --debug           display debug message
   -d, --dump            dump pretty config data
+  -S, --secure-only     use DoT/DoH upstream servers only
   -v, --version         show program's version number and exit
   -h, --help            show this help message and exit
 ```
@@ -79,14 +79,15 @@ options:
 | 命令行参数                     | 描述                                 | 例子                               |
 | ------------------------------ | ------------------------------------ | ---------------------------------- |
 | -c file                        | 加载配置文件                         | dnspooh -c config.yml              |
-| -u dns_server [dns_server ...] | 上游服务器地址列表                   | dnspooh -u 114.114.114.114 1.1.1.1 |
-| -t ms                          | 设置上游服务器超时时间（单位：毫秒） | dnspooh -t 5000                    |
 | -l addr [addr ...]             | 绑定本地网络地址列表                 | dnspooh -l 0.0.0.0 [::]            |
 | -o log                         | 将 stdout 写入到 log 文件            | dnspooh -o output.log              |
-| -D                             | 输出调试信息                         |                                    |
-| -S                             | 仅使用 DoT/DoH 协议的上游服务器      |                                    |
+| -p dir                         | 指定 HTTP 服务的静态文件根目录       | dnspooh -p public                  |
+| -t ms                          | 设置上游服务器超时时间（单位：毫秒） | dnspooh -t 5000                    |
+| -u dns_server [dns_server ...] | 上游服务器地址列表                   | dnspooh -u 114.114.114.114 1.1.1.1 |
 | -6                             | 启用 IPv6 服务器                     |                                    |
+| -D                             | 输出调试信息                         |                                    |
 | -d                             | 打印当前配置信息                     | dnspooh -c config.yml -d           |
+| -S                             | 仅使用 DoT/DoH 协议的上游服务器      |                                    |
 | -v                             | 显示程序当前版本号                   |                                    |
 | -h                             | 打印帮助信息                         |                                    |
 
@@ -397,9 +398,11 @@ HTTP 服务默认绑定 127.0.0.1 地址，使用 1024 到 65535 范围内的随
 
 **参数：** 
 
-| 字段 | 类型    | 描述                   |
-| ---- | ------- | ---------------------- |
-| page | Integer | 页码。每页 50 条数据。 |
+| 字段  | 类型    | 描述                         |
+| ----- | ------- | ---------------------------- |
+| page  | Integer | 页码。可选，默认展示第一页。 |
+| qname | String  | 筛选域名关键字。可选。       |
+| qtype | String  | 筛选查询类型。可选。         |
 
 **返回值：** JSON 对象
 
@@ -429,7 +432,21 @@ HTTP 服务默认绑定 127.0.0.1 地址，使用 1024 到 65535 范围内的随
 }
 ```
 
-#### 2.4.10 域名解析
+#### 2.4.10 清空解析日志
+
+**方法：** POST
+
+**路径：** `/logs/clear`
+
+**参数：** 无
+
+**返回值：** Boolean
+
+```json
+{ "result": true }
+```
+
+#### 2.4.11 域名解析
 
 **方法：** POST
 
@@ -447,7 +464,7 @@ HTTP 服务默认绑定 127.0.0.1 地址，使用 1024 到 65535 范围内的随
 { "result": ";; ->>HEADER<<- opcode: QUERY, status: NOERROR, ... ..." }
 ```
 
-#### 2.4.11 查询 IP 地理位置
+#### 2.4.12 查询 IP 地理位置
 
 **方法：** POST
 
@@ -697,10 +714,34 @@ python -m build
 python -m unittest tests
 ```
 
-Windows 下使用 Nuitka 生成可执行文件：
+项目发布的可执行文件使用 [Nuitka-winsvc](https://github.com/tabris17/Nuitka-winsvc) 编译。首先安装依赖的包：
 
-```powershell
+```shell
 pip install nuitka ordered-set zstandard dnspooh
+```
+
+使用如下命令编译 Windows 可执行文件：
+
+```shell
 nuitka --standalone --output-dir=build --output-filename=dnspooh --windows-icon-from-ico=./assets/favicon.ico --include-package-data=dnspooh --onefile main.py
+```
+
+使用如下命令编译 Windows 服务：
+
+```shell
+nuitka --standalone --output-dir=build --output-filename=dnspooh --windows-icon-from-ico=./assets/favicon.ico --include-package-data=dnspooh --onefile --windows-service --windows-service-name=dnspooh --windows-service-display-name=Dnspooh --windows-service-description="A lightweight DNS MitM proxy" main.py
+```
+
+启动 Web 管理界面前端开发环境：
+
+```shell
+npm i
+npm run dev
+```
+
+构建 Web 管理界面前端：
+
+```shell
+npm run build
 ```
 

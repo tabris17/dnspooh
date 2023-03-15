@@ -13,6 +13,9 @@ from .upstream import *
 logger = logging.getLogger(__name__)
 
 
+LOGGING_FORMAT = "%(asctime)s [%(name)s.%(levelname)s] %(message)s"
+
+
 def parse_arguments():
     parser = argparse.ArgumentParser(
         prog = __package__,
@@ -22,18 +25,20 @@ def parse_arguments():
 
     parser.add_argument('-c', '--config', metavar='file', dest='config',
                         help='config file path (example "%s")' % (CONFIG_FILE, ))
-    parser.add_argument('-u', '--upstream', metavar='dns_server', dest='upstreams', nargs='+',
-                        help='space-separated upstream DNS servers list')
-    parser.add_argument('-t', '--timeout', metavar='ms', dest='timeout', type=int, 
-                        help='milliseconds for upstream DNS response timeout (default %d ms)' % (UPSTREAM_TIMEOUT, ))
     parser.add_argument('-l', '--listen', metavar='addr', dest='listen', nargs='+', 
                         help='binding to local address and port for DNS proxy server (default "%s")' % (LISTEN_ADDRESS, ))
     parser.add_argument('-o', '--output', metavar='log', dest='output', 
                         help='write stdout to the specified file')
-    parser.add_argument('-S', '--secure-only', dest='secure', action='store_true', help='use DoT/DoH upstream servers only')
+    parser.add_argument('-p', '--public', metavar='dir', dest='public', 
+                        help='specify http server root directory')
+    parser.add_argument('-t', '--timeout', metavar='ms', dest='timeout', type=int, 
+                        help='milliseconds for upstream DNS response timeout (default %d ms)' % (UPSTREAM_TIMEOUT, ))
+    parser.add_argument('-u', '--upstream', metavar='dns_server', dest='upstreams', nargs='+',
+                        help='space-separated upstream DNS servers list')
     parser.add_argument('-6', '--enable-ipv6', dest='ipv6', action='store_true', help='enable IPv6 upstream servers')
     parser.add_argument('-D', '--debug', action='store_true', help='display debug message')
     parser.add_argument('-d', '--dump', action='store_true', help='dump pretty config data')
+    parser.add_argument('-S', '--secure-only', dest='secure', action='store_true', help='use DoT/DoH upstream servers only')
     parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + __version__)
     parser.add_argument('-h', '--help', action='help', help='show this help message and exit')
 
@@ -52,7 +57,9 @@ async def startup():
             
         output_file = config.get('output')
         if output_file:
-            logging.root.addHandler(logging.FileHandler(output_file))
+            file_handler = logging.FileHandler(output_file)
+            file_handler.setFormatter(logging.Formatter(LOGGING_FORMAT))
+            logging.root.addHandler(file_handler)
 
         debug = config['debug']
         if debug:
@@ -80,7 +87,7 @@ async def startup():
 def main():
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s [%(name)s.%(levelname)s] %(message)s",
+        format=LOGGING_FORMAT,
         handlers=[logging.StreamHandler()]
     )
     try:

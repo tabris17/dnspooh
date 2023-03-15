@@ -111,6 +111,10 @@ def _response_nxdomain(response):
     return response
 
 
+def _is_a_aaaa(request):
+    return request.q.qtype in (dnslib.QTYPE.AAAA, dnslib.QTYPE.A)
+
+
 class OpCode(enum.Enum):
     NOT = enum.auto()
     AND = enum.auto()
@@ -844,9 +848,6 @@ class RulesMiddleware(Middleware):
         return self._geoip_reader
 
     async def handle(self, request, **kwargs):
-        if request.q.qtype not in (dnslib.QTYPE.AAAA, dnslib.QTYPE.A):
-            return await super().handle(request, **kwargs)
-        
         cached_geoips = dict()
         cached_ipaddrs = dict()
         def geoip(record):

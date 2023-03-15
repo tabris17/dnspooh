@@ -2,6 +2,7 @@ import copy
 import logging
 import yaml
 import pathlib
+import sys
 
 try:
     from yaml import CSafeLoader as YAMLLoader
@@ -509,7 +510,7 @@ def _load_from_file(file_path):
 def _load_from_args(args):
     conf = dict()
 
-    if args.debug is not None:
+    if args.debug:
         conf['debug'] = args.debug
 
     if args.listen is not None:
@@ -518,14 +519,20 @@ def _load_from_args(args):
     if args.timeout is not None:
         conf['timeout'] = args.timeout
 
-    if args.secure is not None:
+    if args.secure:
         conf['secure'] = args.secure
 
-    if args.ipv6 is not None:
+    if args.ipv6:
         conf['ipv6'] = args.ipv6
 
     if args.upstreams is not None:
         conf['upstreams'] = args.upstreams
+
+    if args.output is not None:
+        conf['output'] = args.output
+
+    if args.public is not None:
+        conf['http'] = { 'root': args.public }
 
     return conf
 
@@ -600,9 +607,13 @@ class Config:
             logger.info('Config file "%s" loaded', config_file.absolute())
         else:
             config_file = pathlib.Path(CONFIG_FILE)
-            if config_file.is_file():
-               conf = _merge_dict_recursive(conf, _load_from_file(config_file))
-               logger.info('Default config file "%s" loaded', config_file.absolute())
+            if not config_file.is_file():
+                config_file = pathlib.Path(sys.path[0]).joinpath(CONFIG_FILE)
+            try:
+                conf = _merge_dict_recursive(conf, _load_from_file(config_file))
+                logger.info('Default config file "%s" loaded', config_file.absolute())
+            except:
+                pass
 
         conf = _merge_dict_recursive(conf, copy.deepcopy(DEFAULT_CONFIG), ['upstreams'])
 

@@ -9,3 +9,5 @@ build/
 *.log-*
 var/
 out/
+node_modules/
+
