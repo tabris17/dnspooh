@@ -509,7 +509,7 @@ def _load_from_file(file_path):
 def _load_from_args(args):
     conf = dict()
 
-    if args.debug is not None:
+    if args.debug:
         conf['debug'] = args.debug
 
     if args.listen is not None:
@@ -518,10 +518,10 @@ def _load_from_args(args):
     if args.timeout is not None:
         conf['timeout'] = args.timeout
 
-    if args.secure is not None:
+    if args.secure:
         conf['secure'] = args.secure
 
-    if args.ipv6 is not None:
+    if args.ipv6:
         conf['ipv6'] = args.ipv6
 
     if args.upstreams is not None:
