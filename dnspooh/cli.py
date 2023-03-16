@@ -48,7 +48,7 @@ def parse_arguments():
 
 async def startup():
     try:
-        debug = True
+        debug = False
         args = parse_arguments()
         config = Config.load(args)
         if args.dump:

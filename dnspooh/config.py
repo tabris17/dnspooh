@@ -490,7 +490,7 @@ _parse_addr = functools.partial(parse_addr, DEFAULT_LISTEN_HOST, DEFAULT_DNS_POR
 
 def _load_from_file(file_path):
     if not file_path.is_file():
-        raise FileNotFoundError('Cannot load config file "%s"' % (file_path.absolute(), ))
+        raise FileNotFoundError('Cannot load config file "%s"' % file_path.resolve())
 
     def yaml_include(loader, node):
         node_value = loader.construct_scalar(node)
@@ -499,7 +499,7 @@ def _load_from_file(file_path):
 
     def yaml_path(loader, node):
         node_value = loader.construct_scalar(node)
-        return str(file_path.parent.joinpath(node_value).absolute())
+        return str(file_path.parent.joinpath(node_value).resolve())
 
     YAMLLoader.add_constructor('!include', yaml_include)
     YAMLLoader.add_constructor('!path', yaml_path)
@@ -606,14 +606,20 @@ class Config:
             conf = _merge_dict_recursive(conf, _load_from_file(config_file))
             logger.info('Config file "%s" loaded', config_file.absolute())
         else:
-            config_file = pathlib.Path(CONFIG_FILE)
-            if not config_file.is_file():
-                config_file = pathlib.Path(sys.path[0]).joinpath(CONFIG_FILE)
-            try:
-                conf = _merge_dict_recursive(conf, _load_from_file(config_file))
-                logger.info('Default config file "%s" loaded', config_file.absolute())
-            except:
-                pass
+            config_files = (
+                pathlib.Path(CONFIG_FILE),
+                pathlib.Path('config').joinpath(CONFIG_FILE),
+                pathlib.Path(sys.path[0]).joinpath(CONFIG_FILE),
+                pathlib.Path(sys.path[0]).joinpath('config').joinpath(CONFIG_FILE),
+            )
+            for config_file in config_files:
+                try:
+                    conf = _merge_dict_recursive(conf, _load_from_file(config_file))
+                    logger.info('Default config file "%s" loaded', config_file.absolute())
+                    break
+                except:
+                    pass
+
 
         conf = _merge_dict_recursive(conf, copy.deepcopy(DEFAULT_CONFIG), ['upstreams'])
 
