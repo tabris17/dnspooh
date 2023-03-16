@@ -2,6 +2,8 @@ import enum
 import urllib.parse
 import random
 import json
+import os
+import pathlib
 
 
 def split_domain(name, reverse=True):
@@ -45,6 +47,16 @@ def flat_dict(d, key_prefix='', key_sep='.'):
         else:
             flatten.append((_k[1:], v))
     return flatten
+
+
+def prepare_path(file_path):
+    file_path = pathlib.Path(file_path).resolve()
+    dir_path = os.path.dirname(file_path)
+    try:
+        os.makedirs(dir_path)
+    except FileExistsError:
+        pass
+    return file_path
 
 
 class RandomInt:

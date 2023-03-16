@@ -1,13 +1,12 @@
-#proxy: socks5://127.0.0.1:7890
-
-secure: true
-
 hosts:
   - !path hosts
   - https://raw.hellogithub.com/hosts
 
 block:
   - !path block.txt
+
+http:
+  root: !path ../public
 
 rules:
   - !include cn-domain.yml

@@ -74,7 +74,7 @@ A Lightweight DNS MitM Proxy
   -h, --help            show this help message and exit
 ```
 
-可以通过命令行参数和配置文件来对程序进行设置。通过命令行参数传递的设置优先级高于配置文件中对应的设置。如果没有指定配置文件，程序启动后会尝试加载当前目录下的 `config.yml` 配置文件。
+可以通过命令行参数和配置文件来对程序进行设置。通过命令行参数传递的设置优先级高于配置文件中对应的设置。如果没有指定配置文件，程序会尝试加载当前工作目录、程序文件所在目录中的 `config.yml` 或 `config\config.yml` 配置文件。
 
 | 命令行参数                     | 描述                                 | 例子                               |
 | ------------------------------ | ------------------------------------ | ---------------------------------- |
@@ -720,13 +720,7 @@ python -m unittest tests
 pip install nuitka ordered-set zstandard dnspooh
 ```
 
-使用如下命令编译 Windows 可执行文件：
-
-```shell
-nuitka --standalone --output-dir=build --output-filename=dnspooh --windows-icon-from-ico=./assets/favicon.ico --include-package-data=dnspooh --onefile main.py
-```
-
-使用如下命令编译 Windows 服务：
+官方发布的 Windows 程序使用如下 Nuitka 命令编译：
 
 ```shell
 nuitka --standalone --output-dir=build --output-filename=dnspooh --windows-icon-from-ico=./assets/favicon.ico --include-package-data=dnspooh --onefile --windows-service --windows-service-name=dnspooh --windows-service-display-name=Dnspooh --windows-service-description="A lightweight DNS MitM proxy" main.py
