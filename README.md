@@ -714,11 +714,22 @@ python -m build
 python -m unittest tests
 ```
 
-Windows 下使用 Nuitka 生成可执行文件：
+项目发布的可执行文件使用 [Nuitka-winsvc](https://github.com/tabris17/Nuitka-winsvc) 编译。首先安装依赖的包：
 
 ```shell
 pip install nuitka ordered-set zstandard dnspooh
+```
+
+使用如下命令编译 Windows 可执行文件：
+
+```shell
 nuitka --standalone --output-dir=build --output-filename=dnspooh --windows-icon-from-ico=./assets/favicon.ico --include-package-data=dnspooh --onefile main.py
+```
+
+使用如下命令编译 Windows 服务：
+
+```shell
+nuitka --standalone --output-dir=build --output-filename=dnspooh --windows-icon-from-ico=./assets/favicon.ico --include-package-data=dnspooh --onefile --windows-service --windows-service-name=dnspooh --windows-service-display-name=Dnspooh --windows-service-description="A lightweight DNS MitM proxy" main.py
 ```
 
 启动 Web 管理界面前端开发环境：
