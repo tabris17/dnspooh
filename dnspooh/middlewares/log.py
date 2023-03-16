@@ -6,6 +6,7 @@ import json
 import dnslib
 
 from . import Middleware, Traceback
+from ..helpers import prepare_path
 
 
 logger = logging.getLogger(__name__)
@@ -85,7 +86,7 @@ def _quote_like(value):
 class LogMiddleware(Middleware):
 
     def __init__(self, path, trace, payload):
-        self.path = path
+        self.path = prepare_path(path)
         self.trace = trace
         self.payload = payload
         sqlite3.register_adapter(Traceback, self._adapt_traceback)

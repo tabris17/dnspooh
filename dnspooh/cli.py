@@ -8,6 +8,7 @@ from . import server
 from . import __version__, __description__
 from .config import *
 from .upstream import *
+from .helpers import prepare_path
 
 
 logger = logging.getLogger(__name__)
@@ -57,7 +58,7 @@ async def startup():
             
         output_file = config.get('output')
         if output_file:
-            file_handler = logging.FileHandler(output_file)
+            file_handler = logging.FileHandler(prepare_path(output_file))
             file_handler.setFormatter(logging.Formatter(LOGGING_FORMAT))
             logging.root.addHandler(file_handler)
 
