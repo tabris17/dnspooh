@@ -42,7 +42,13 @@ python main.py --help
 
 ### 1.3 可执行文件
 
-可以在 <https://github.com/tabris17/dnspooh/releases> 页面中下载软件的 Windows 可执行文件。将下载的 `dnspooh-vX.Y.Z-win-amd64.zip` （其中 X.Y.Z 是版本号）文件解压缩保存在本地，运行其中的 `dnspooh.exe` 可执行文件。
+可以在 <https://github.com/tabris17/dnspooh/releases> 页面中下载软件的 Windows 可执行文件。将下载的 `dnspooh-X.Y.Z-win-amd64.zip` （其中 X.Y.Z 是版本号）文件解压缩保存在本地，运行其中的 `dnspooh.exe` 可执行文件。
+
+Windows 平台下还可以使用 scoop 进行安装：
+
+```shell
+scoop install https://github.com/tabris17/dnspooh/releases/latest/download/dnspooh.json
+```
 
 ## 2. 使用方法
 
