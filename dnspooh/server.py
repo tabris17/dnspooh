@@ -191,19 +191,19 @@ class Server:
             raise NetworkError('No available upstream server')
         logger.info('Primary DNS is %s', primary_upstream.name)
 
-    def create_task(self, coro, name=None, context=None):
-        task = self.loop.create_task(coro, name=name, context=context)
+    def create_task(self, coro, name=None):
+        task = self.loop.create_task(coro, name=name)
         self.tasks.append(task)
         task.add_done_callback(lambda _: self.remove_task(task))
         return task
 
-    def create_scheduled_task(self, coro, timer, name=None, context=None):
+    def create_scheduled_task(self, coro, timer, name=None):
         async def _task():
             async for i in timer:
                 logger.debug('Schedule task "%s" repeat times %d' % (name, i))
                 await coro()
 
-        return self.create_task(_task(), name, context)
+        return self.create_task(_task(), name)
 
     def remove_task(self, task):
         self.tasks.remove(task)

@@ -42,7 +42,7 @@ class Server(ServerBase, LoggerMixin):
     def __init__(self):
         pass
 
-    def create_scheduled_task(self, coro, timer, name=None, context=None):
+    def create_scheduled_task(self, coro, timer, name=None):
         self.log_call()
 
     async def bootstrap(self):
