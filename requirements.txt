@@ -3,4 +3,4 @@ certifi==2022.12.7
 dnslib==0.9.23
 maxminddb==2.2.0
 pyparsing==3.0.9
-PyYAML==6.0
+PyYAML==6.0.1
