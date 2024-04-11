@@ -26,7 +26,7 @@ dynamic = ["version", "readme", "dependencies"]
 "Homepage" = "https://github.com/tabris17/dnspooh"
 "Bug Tracker" = "https://github.com/tabris17/dnspooh/issues"
 
-[project.entry-points.console_scripts]
+[project.scripts]
 dnspooh = "dnspooh.cli:main"
 
 [tool.setuptools.dynamic]
