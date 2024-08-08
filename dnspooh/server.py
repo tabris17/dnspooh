@@ -81,10 +81,10 @@ class QueryProtocol(asyncio.DatagramProtocol):
 class Server:
     class Status(enum.Enum):
         INITIALIZED = enum.auto()
-        START_PEDDING = enum.auto()
+        START_PENDING = enum.auto()
         RUNNING = enum.auto()
-        RESTART_PEDDING = enum.auto()
-        STOP_PEDDING = enum.auto()
+        RESTART_PENDING = enum.auto()
+        STOP_PENDING = enum.auto()
         STOPPED = enum.auto()
 
     def __init__(self, config, loop=None):
@@ -95,7 +95,7 @@ class Server:
         self.status = self.Status.INITIALIZED
         self.tasks = []
         self.transports = []
-        logger.debug('DNS serivce initialized')
+        logger.debug('DNS service initialized')
 
     async def _wait_for_network(self):
         import socket
@@ -120,7 +120,7 @@ class Server:
 
         self.local_addrs = self.config['listen']
         self.timeout_sec = self.config['timeout'] / 1000
-        self.upstreams = UpstreamCollection(self.config['upstreams'], 
+        self.upstreams = UpstreamCollection(self.config['upstreams'],
                                             self.config['secure'],
                                             self.config['ipv6'])
         self.proxy = self.config['proxy']
@@ -417,7 +417,7 @@ class Server:
         task.add_done_callback(functools.partial(self.on_response, transport, request, addr))
 
     def restart(self):
-        self.status = self.Status.RESTART_PEDDING
+        self.status = self.Status.RESTART_PENDING
         logger.info('Restarting service')
         
         from .cli import parse_arguments
@@ -438,9 +438,9 @@ class Server:
         return self.loop.create_task(reset(sockname))
 
     async def run(self):
-        self.status = self.Status.START_PEDDING
+        self.status = self.Status.START_PENDING
         await self._run()
-        while self.status == self.Status.RESTART_PEDDING:
+        while self.status == self.Status.RESTART_PENDING:
             self.restart_event.clear()
             await self._run()
 
@@ -464,16 +464,16 @@ class Server:
                     return
 
             self.status = self.Status.RUNNING
-            logger.info('DNS serivce started')
+            logger.info('DNS service started')
 
             try:
                 await self.restart_event.wait()
             except asyncio.CancelledError:
-                logger.debug('DNS serivce interrupted')
+                logger.debug('DNS service interrupted')
             finally:
                 if self.status == self.Status.RUNNING:
                     self.status = self.Status.STOPPED
-                    logger.info('DNS serivce stopped')
+                    logger.info('DNS service stopped')
         finally:
             for transport in self.transports:
                 transport.close()
@@ -546,7 +546,7 @@ class Server:
             },
             'logs': log_middleware.query_dataset(page, qname, qtype),
         })
-    
+
     def _handle_clear_access_log(self):
         log_middleware = self.middlewares.get_component('log')
         if not isinstance(log_middleware, middlewares.LogMiddleware):
@@ -562,8 +562,8 @@ class Server:
     @https.async_json_handler
     async def _handle_test_upstream(self, name):
         if name not in self.upstreams:
-            return https.JsonResponse(https.JSONError.ILLEGAL_PARAM, 
-                                      https.HTTPStatus.BAD_REQUEST) 
+            return https.JsonResponse(https.JSONError.ILLEGAL_PARAM,
+                                      https.HTTPStatus.BAD_REQUEST)
         return https.response_json_result(await self.test_upstream(self.upstreams[name], TEST_DOMAIN))
 
     @https.async_json_handler

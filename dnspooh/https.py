@@ -385,7 +385,7 @@ class Server:
         self.config = config
         self._request_handler = self._create_request_handler(handler)
         self._server = None
-        logger.debug('HTTP serivce initialized')
+        logger.debug('HTTP service initialized')
     
     def _create_request_handler(self, handler):
         if hasattr(handler, 'handle'):
@@ -530,17 +530,17 @@ class Server:
             logger.warn('HTTP server host %s is not safe', host)
         self.timeout_sec = http_config['timeout'] / 1000
         self._server = await asyncio.start_server(self.on_connect, host, port)
-        logger.info('HTTP serivce started')
+        logger.info('HTTP service started')
         logger.info('HTTP server is available at http://%s:%d/', host, port)
 
         try:
             async with self._server:
                 await self._server.serve_forever()
         except asyncio.CancelledError:
-            logger.debug('HTTP serivce interrupted')
+            logger.debug('HTTP service interrupted')
         finally:
             self._server.close()
-            logger.info('HTTP serivce stopped')
+            logger.info('HTTP service stopped')
 
 
 async def _read_http_message(reader, max_body=None):
