@@ -262,10 +262,10 @@ HTTP 服务默认绑定 127.0.0.1 地址，使用 1024 到 65535 范围内的随
 `status` 可能的返回值如下（其中几种状态可能永远观测不到）：
 
 - INITIALIZED 已初始化
-- START_PEDDING 正在启动
+- START_PENDING 正在启动
 - RUNNING 正在运行
-- RESTART_PEDDING 正在重启
-- STOP_PEDDING 正在停止
+- RESTART_PENDING 正在重启
+- STOP_PENDING 正在停止
 - STOPPED 已停止
 
 #### 2.4.3 重启服务

@@ -3,7 +3,7 @@
     import { get, post } from '../utils'
     import Notification from '../components/Notification.svelte'
 
-    let testAllPedding = false
+    let testAllPending = false
 
     let notification: Notification
 
@@ -14,9 +14,9 @@
     }
 
     async function testAll() {
-        testAllPedding = true
+        testAllPending = true
         await post('/upstreams/test-all')
-        testAllPedding = false
+        testAllPending = false
         notification.showMessage('全部节点测试完成')
         reload()
     }
@@ -56,7 +56,7 @@
         {#await query then payload}({payload.result.upstreams.length}){/await}
     </p>
     <div class="buttons" slot="right">
-        <button class="button is-info is-light" class:is-loading="{testAllPedding}" on:click={testAll}>测试全部节点</button>
+        <button class="button is-info is-light" class:is-loading="{testAllPending}" on:click={testAll}>测试全部节点</button>
         <button class="button is-info is-light" on:click={reload}>刷新</button>
     </div>
 </PageTitle>

@@ -13,7 +13,7 @@ pkg_requires = [
     'dnslib==0.9.23',
     'maxminddb==2.2.0',
     'pyparsing==3.0.9',
-    'PyYAML==6.0',
+    'PyYAML==6.0.1',
 ]
 pkg_version = {}
 python_requires = '>=3.10'
@@ -32,6 +32,7 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
         "Programming Language :: Python :: 3 :: Only",
     ],
     description=pkg_desc,

@@ -32,15 +32,15 @@
         query = makeQuery()
     }
 
-    let clearPedding = false
+    let clearPending = false
 
     async function handleClear(this: HTMLElement) {
         if (!confirm('清空操作将从数据库中删除所有记录，记录清空后无法恢复。\r是否要继续？')) {
             return
         }
-        clearPedding = true
+        clearPending = true
         await post('/logs/clear')
-        clearPedding = false
+        clearPending = false
         reload()
     }
 
@@ -78,7 +78,7 @@
                 </div>
             </div>
             <div class="field">
-                <button class="button is-danger" class:is-loading="{clearPedding}" on:click={handleClear}>清空</button>
+                <button class="button is-danger" class:is-loading="{clearPending}" on:click={handleClear}>清空</button>
             </div>
         </div>
     </div>
